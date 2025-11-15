@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 2,
   "builds": [
     {
       "src": "api/chat.js",
@@ -14,7 +14,7 @@
     {
       "src": "/api/chat",
       "dest": "/api/chat.js",
-      "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"]
+      "methods": ["GET", "POST", "OPTIONS"]
     },
     {
       "src": "/(.*)",

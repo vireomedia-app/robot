@@ -1,56 +1,68 @@
 // api/chat.js
-export default async function handler(request, response) {
-  console.log('🎯 API CHAT - Request received');
+module.exports = async (req, res) => {
+  console.log('🎯 API CHAT - Request received at:', new Date().toISOString());
   
   // CORS headers
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-  response.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   // Handle preflight
-  if (request.method === 'OPTIONS') {
+  if (req.method === 'OPTIONS') {
     console.log('🔄 Handling OPTIONS preflight');
-    return response.status(200).end();
+    return res.status(200).end();
   }
   
-  // Handle GET requests
-  if (request.method === 'GET') {
-    console.log('📨 GET request');
-    return response.status(200).json({
+  // Handle GET requests - test endpoint
+  if (req.method === 'GET') {
+    console.log('📨 GET request - API is working!');
+    return res.json({
       status: 'success',
-      message: 'API chat is working!',
+      message: '🤖 Robot API is working perfectly!',
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
+      version: '1.0'
     });
   }
   
-  // Handle POST requests
-  if (request.method === 'POST') {
+  // Handle POST requests - chat functionality
+  if (req.method === 'POST') {
     try {
-      console.log('📨 POST request');
-      const body = request.body;
-      console.log('Request body:', body);
+      console.log('📨 POST request received');
+      const { message } = req.body;
       
-      return response.status(200).json({
+      console.log('User message:', message);
+      
+      // Simple AI responses without external API
+      const responses = [
+        "Cześć! Jak się masz?",
+        "To świetna zabawa! Opowiedz mi coś więcej.",
+        "Uwielbiam się uczyć nowych rzeczy!",
+        "Super pytanie! Chcesz poznać ciekawostkę?",
+        "Jestem małym robotem i dopiero się uczę!"
+      ];
+      
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      
+      return res.json({
         status: 'success',
-        response: `Received: ${body?.message || 'No message'}`,
-        timestamp: new Date().toISOString(),
-        yourMessage: body?.message
+        response: randomResponse,
+        yourMessage: message,
+        timestamp: new Date().toISOString()
       });
       
     } catch (error) {
-      console.error('Error:', error);
-      return response.status(500).json({
+      console.error('❌ Error:', error);
+      return res.status(500).json({
         status: 'error',
-        error: error.message
+        error: 'Internal server error'
       });
     }
   }
   
   // Method not allowed
-  console.log('❌ Method not allowed:', request.method);
-  return response.status(405).json({
+  console.log('❌ Method not allowed:', req.method);
+  return res.status(405).json({
     status: 'error',
-    message: `Method ${request.method} not allowed`
+    message: `Method ${req.method} not allowed`
   });
-}
+};
