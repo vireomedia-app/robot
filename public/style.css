@@ -1,0 +1,185 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: 'Arial', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    user-select: none;
+}
+
+.app {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+/* Twarz robota */
+.robot-face {
+    width: 300px;
+    height: 400px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.eyes {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 30px;
+    margin-top: 80px;
+}
+
+.eye {
+    width: 80px;
+    height: 80px;
+    background: white;
+    border: 3px solid #333;
+    border-radius: 50%;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.pupil {
+    width: 40px;
+    height: 40px;
+    background: #333;
+    border-radius: 50%;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    transition: all 0.1s ease;
+}
+
+.mouth {
+    width: 120px;
+    height: 30px;
+    background: #333;
+    border-radius: 0 0 60px 60px;
+    margin: 60px auto 0;
+    transition: all 0.2s ease;
+}
+
+/* Stany animacji */
+.listening .eye {
+    background: #ffeb3b;
+    border-color: #ff9800;
+}
+
+.listening .pupil {
+    background: #ff9800;
+    animation: blink 2s infinite;
+}
+
+.thinking .mouth {
+    animation: think 1s infinite alternate;
+    background: #4CAF50;
+}
+
+.talking .mouth {
+    animation: talk 0.3s infinite alternate;
+    background: #f44336;
+}
+
+/* Animacje */
+@keyframes talk {
+    0% { height: 20px; border-radius: 0 0 60px 60px; }
+    100% { height: 50px; border-radius: 0 0 80px 80px; }
+}
+
+@keyframes think {
+    0% { transform: scaleX(0.8); }
+    100% { transform: scaleX(1.2); }
+}
+
+@keyframes blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.1); }
+}
+
+/* Status */
+.status {
+    margin-top: 30px;
+    color: white;
+    font-size: 18px;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    min-height: 27px;
+}
+
+/* Kontrolki */
+.controls {
+    position: absolute;
+    bottom: 30px;
+    display: flex;
+    gap: 20px;
+}
+
+.control-btn {
+    width: 60px;
+    height: 60px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(10px);
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.control-btn:hover {
+    background: rgba(255,255,255,0.3);
+    transform: scale(1.1);
+}
+
+/* Debug panel */
+.debug-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    max-width: 300px;
+    display: none;
+}
+
+.debug-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+/* Responsywność */
+@media (max-width: 480px) {
+    .robot-face {
+        width: 250px;
+        height: 350px;
+    }
+    
+    .eye {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .pupil {
+        width: 30px;
+        height: 30px;
+        top: 15px;
+        left: 15px;
+    }
+}
+
+/* Pełny ekran */
+:fullscreen .app {
+    padding: 20px;
+}

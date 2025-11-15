@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Asystent</title>
+    <meta name="theme-color" content="#4F46E5">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div class="app">
+        <!-- Twarz robota -->
+        <div class="robot-face" id="robotFace">
+            <div class="eyes">
+                <div class="eye left-eye">
+                    <div class="pupil"></div>
+                </div>
+                <div class="eye right-eye">
+                    <div class="pupil"></div>
+                </div>
+            </div>
+            <div class="mouth" id="mouth"></div>
+        </div>
+
+        <!-- Status aplikacji -->
+        <div class="status" id="status">Gotowy do rozmowy</div>
+        
+        <!-- Ukryte kontrolki -->
+        <div class="controls">
+            <button id="listenBtn" class="control-btn">🎤</button>
+            <button id="fullscreenBtn" class="control-btn">⛶</button>
+        </div>
+
+        <!-- Debug panel -->
+        <div class="debug-panel" id="debugPanel">
+            <div class="debug-title">Debug Info</div>
+            <div id="debugText">Status: OK</div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
