@@ -3,8 +3,6 @@ class RobotApp {
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
-        this.speechTimeout = null;
-        this.lastSpeechTime = null;
         
         this.robotFace = document.getElementById('robotFace');
         this.mouth = document.getElementById('mouth');
@@ -21,9 +19,10 @@ class RobotApp {
         this.setupAnimations();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
         
-        this.debugLog('Aplikacja gotowa');
+        console.log('🤖 Robot initialized');
         
-        if (window.location.hostname === 'localhost') {
+        // Pokaż debug panel na localhost i w development
+        if (window.location.hostname === 'localhost' || window.location.protocol === 'http:') {
             this.debugPanel.style.display = 'block';
         }
     }
@@ -33,63 +32,56 @@ class RobotApp {
         
         if (!SpeechRecognition) {
             this.updateStatus('Przeglądarka nie obsługuje rozpoznawania mowy');
-            this.debugLog('SpeechRecognition not supported');
+            console.error('❌ Speech Recognition not supported');
             return;
         }
 
         this.recognition = new SpeechRecognition();
         this.recognition.continuous = false;
-        this.recognition.interimResults = true;
+        this.recognition.interimResults = false;
         this.recognition.lang = 'pl-PL';
         this.recognition.maxAlternatives = 1;
 
         this.recognition.onstart = () => {
-            console.log('🟢 [MOBILE DEBUG] Recognition started');
+            console.log('🎤 Rozpoczęto słuchanie');
             this.isListening = true;
             this.setListeningState();
             this.updateStatus('Mów teraz...');
-            this.startSpeechTimeout();
         };
 
-        this.recognition.onresult = (event) => {
-            clearTimeout(this.speechTimeout);
-            
-            let finalText = '';
-            let interimText = '';
-
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalText += transcript;
-                } else {
-                    interimText += transcript;
-                }
-            }
-
-            this.lastSpeechTime = Date.now();
-            
-            if (finalText) {
-                console.log('🟢 [MOBILE DEBUG] Final text:', finalText);
-                this.processFinalText(finalText);
-            } else if (interimText) {
-                console.log('🔵 [MOBILE DEBUG] Interim text:', interimText);
-                this.updateStatus(`Słyszę: "${interimText}"`);
-                this.startSpeechTimeout();
+        this.recognition.onresult = async (event) => {
+            if (event.results.length > 0) {
+                const text = event.results[0][0].transcript;
+                console.log('🗣️ Rozpoznano:', text);
+                
+                this.updateStatus(`Usłyszałem: "${text}"`);
+                this.isListening = false;
+                
+                await this.processUserInput(text);
             }
         };
 
         this.recognition.onerror = (event) => {
-            console.log('🔴 [MOBILE DEBUG] Recognition error:', event.error);
-            clearTimeout(this.speechTimeout);
+            console.log('❌ Błąd rozpoznawania:', event.error);
+            
+            // Specyficzne komunikaty dla różnych błędów
+            if (event.error === 'not-allowed') {
+                this.updateStatus('Brak uprawnień do mikrofonu');
+                this.debugLog('❌ Microphone permission denied');
+            } else if (event.error === 'audio-capture') {
+                this.updateStatus('Nie znaleziono mikrofonu');
+                this.debugLog('❌ No microphone found');
+            } else {
+                this.updateStatus('Błąd rozpoznawania mowy');
+                this.debugLog(`❌ Speech error: ${event.error}`);
+            }
+            
             this.setNormalState();
-            this.updateStatus('Kliknij 🎤 aby rozmawiać');
         };
 
         this.recognition.onend = () => {
-            console.log('🟢 [MOBILE DEBUG] Recognition ended');
-            clearTimeout(this.speechTimeout);
+            console.log('⏹️ Zakończono słuchanie');
             this.isListening = false;
-            
             if (!this.isThinking && !this.isTalking) {
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
@@ -97,56 +89,62 @@ class RobotApp {
         };
     }
 
-    startSpeechTimeout() {
-        clearTimeout(this.speechTimeout);
-        this.speechTimeout = setTimeout(() => {
-            console.log('🟡 [MOBILE DEBUG] Speech timeout - no speech detected');
-            if (this.isListening) {
-                this.recognition.stop();
-            }
-        }, 3000);
-    }
-
-    async processFinalText(text) {
-        console.log('🔵 [MOBILE DEBUG] processFinalText started:', text);
-        this.updateStatus(`Usłyszałem: "${text}"`);
-        
-        try {
-            this.recognition.stop();
-            console.log('🟢 [MOBILE DEBUG] Recognition stopped');
-        } catch (e) {
-            console.log('🟡 [MOBILE DEBUG] Error stopping recognition:', e);
-        }
-        
-        this.isListening = false;
-        console.log('🔵 [MOBILE DEBUG] Calling processUserInput');
-        
-        await this.processUserInput(text);
-        
-        console.log('🟢 [MOBILE DEBUG] processFinalText completed');
-    }
-
     setupEventListeners() {
-        document.getElementById('listenBtn').addEventListener('click', () => {
+        const listenBtn = document.getElementById('listenBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+        // Ulepszone event listeners dla mobile
+        listenBtn.addEventListener('click', (e) => {
+            e.preventDefault();
             this.toggleListening();
         });
 
-        document.getElementById('resetBtn').addEventListener('click', () => {
+        listenBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.toggleListening();
+        });
+
+        resetBtn.addEventListener('click', () => {
             this.resetListening();
         });
 
-        document.getElementById('fullscreenBtn').addEventListener('click', () => {
+        resetBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.resetListening();
+        });
+
+        fullscreenBtn.addEventListener('click', () => {
             this.toggleFullscreen();
         });
 
+        fullscreenBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.toggleFullscreen();
+        });
+
+        // Ruch oczu - ulepszone dla mobile
         document.addEventListener('mousemove', (e) => {
             this.moveEyes(e.clientX, e.clientY);
         });
 
         document.addEventListener('touchmove', (e) => {
-            const touch = e.touches[0];
-            this.moveEyes(touch.clientX, touch.clientY);
-        });
+            if (e.touches.length > 0) {
+                const touch = e.touches[0];
+                this.moveEyes(touch.clientX, touch.clientY);
+            }
+        }, { passive: true });
+
+        // Zapobiegaj zoomowaniu na dłuższe tapnięcia
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', (e) => {
+            e.preventDefault();
+        }, { passive: false });
     }
 
     setupAnimations() {
@@ -187,9 +185,10 @@ class RobotApp {
         });
     }
 
-    startListening() {
+    async startListening() {
         if (this.isListening || this.isThinking || this.isTalking) {
-            console.log('🟡 [MOBILE DEBUG] Cannot start - busy');
+            console.log('⏹️ Already busy, stopping current session');
+            this.recognition.stop();
             return;
         }
         
@@ -199,28 +198,27 @@ class RobotApp {
         }
         
         try {
-            this.recognition.stop();
-        } catch (e) {}
-        
-        clearTimeout(this.speechTimeout);
-        this.lastSpeechTime = null;
-        
-        setTimeout(() => {
-            try {
-                this.recognition.start();
-                console.log('🟢 [MOBILE DEBUG] Manual start listening');
-            } catch (error) {
-                console.log('🔴 [MOBILE DEBUG] Start error:', error);
-                this.updateStatus('Błąd mikrofonu');
-                this.setNormalState();
-            }
-        }, 100);
+            // Anuluj wszelką syntezę mowy przed rozpoczęciem nasłuchiwania
+            window.speechSynthesis.cancel();
+            
+            console.log('🎤 Ręczne uruchomienie słuchania');
+            this.recognition.start();
+            
+        } catch (error) {
+            console.log('❌ Błąd uruchomienia:', error);
+            this.updateStatus('Błąd mikrofonu - sprawdź uprawnienia');
+            this.setNormalState();
+            
+            // Pokaż alert z instrukcją dla użytkownika
+            setTimeout(() => {
+                alert('Aby używać mikrofonu na mobile:\n1. Kliknij 🎤\n2. Zezwól na dostęp do mikrofonu\n3. Upewnij się, że masz połączenie z internetem');
+            }, 500);
+        }
     }
 
     toggleListening() {
         if (this.isListening) {
-            console.log('🟢 [MOBILE DEBUG] Manual stop - user clicked mic again');
-            clearTimeout(this.speechTimeout);
+            console.log('⏹️ Ręczne zatrzymanie słuchania');
             this.recognition.stop();
             this.setNormalState();
             this.updateStatus('Kliknij 🎤 aby rozmawiać');
@@ -233,48 +231,46 @@ class RobotApp {
         if (this.recognition) {
             try {
                 this.recognition.stop();
-            } catch (error) {}
+            } catch (error) {
+                console.log('⚠️ Error stopping recognition:', error);
+            }
         }
         
         window.speechSynthesis.cancel();
-        clearTimeout(this.speechTimeout);
         
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
         this.setNormalState();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
-        console.log('🟢 [MOBILE DEBUG] Manual reset');
+        console.log('🔄 Reset');
+        this.debugLog('System zresetowany');
     }
 
     async processUserInput(text) {
-        console.log('🔵 [MOBILE DEBUG] processUserInput started:', text);
+        console.log('🧠 Przetwarzanie:', text);
+        this.debugLog(`Przetwarzanie: "${text}"`);
         this.setThinkingState();
         
         try {
-            console.log('🔵 [MOBILE DEBUG] Calling sendToAI');
             const response = await this.sendToAI(text);
-            console.log('🟢 [MOBILE DEBUG] sendToAI completed:', response);
-            
-            console.log('🔵 [MOBILE DEBUG] Calling speakResponse');
+            console.log('🤖 Odpowiedź AI:', response);
+            this.debugLog(`Odpowiedź AI: "${response}"`);
             await this.speakResponse(response);
-            console.log('🟢 [MOBILE DEBUG] speakResponse completed');
             
         } catch (error) {
-            console.log('🔴 [MOBILE DEBUG] Error in processUserInput:', error);
-            this.debugLog(`Błąd przetwarzania: ${error}`);
+            console.log('❌ Błąd przetwarzania:', error);
+            this.debugLog(`Błąd: ${error.message}`);
             this.updateStatus('Błąd przetwarzania');
             this.speakResponse('Przepraszam, wystąpił błąd. Spróbuj ponownie.');
         }
-        
-        console.log('🟢 [MOBILE DEBUG] processUserInput completed');
     }
 
     async sendToAI(userText) {
-        console.log('🔵 [MOBILE DEBUG] sendToAI started:', userText);
-        
         try {
-            console.log('🔵 [MOBILE DEBUG] Making fetch request to /api/chat');
+            console.log('📤 Wysyłanie do API:', userText);
+            this.debugLog(`Wysyłanie: "${userText}"`);
+            
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
@@ -283,26 +279,30 @@ class RobotApp {
                 body: JSON.stringify({ message: userText })
             });
 
-            console.log('🟢 [MOBILE DEBUG] Fetch completed, status:', response.status);
+            console.log('📥 Status odpowiedzi:', response.status);
+            this.debugLog(`Status API: ${response.status}`);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('🟢 [MOBILE DEBUG] Response data:', data);
+            console.log('✅ Otrzymano odpowiedź:', data);
             
             return data.response;
             
         } catch (error) {
-            console.log('🔴 [MOBILE DEBUG] Fetch error:', error);
+            console.log('❌ Błąd fetch:', error);
+            this.debugLog(`Błąd fetch: ${error.message}`);
             return 'Przepraszam, nie mogę się teraz połączyć z systemem. Spróbuj ponownie.';
         }
     }
 
     async speakResponse(text) {
-        console.log('🔵 [MOBILE DEBUG] speakResponse started:', text);
+        console.log('🗣️ Rozpoczynam mówienie:', text);
+        this.debugLog(`Mówię: "${text}"`);
         
+        // Zatrzymaj wszystko przed mówieniem
         if (this.isListening) {
             this.recognition.stop();
         }
@@ -311,36 +311,57 @@ class RobotApp {
         this.setTalkingState();
         
         return new Promise((resolve) => {
-            console.log('🔵 [MOBILE DEBUG] Creating utterance');
-            const utterance = new SpeechSynthesisUtterance(text);
+            const cleanText = this.removeEmojis(text);
+            console.log('🧹 Tekst po usunięciu emotek:', cleanText);
+            
+            const utterance = new SpeechSynthesisUtterance(cleanText);
             utterance.lang = 'pl-PL';
             utterance.rate = 0.9;
             utterance.pitch = 1.0;
+            utterance.volume = 1.0;
             
             utterance.onstart = () => {
-                console.log('🟢 [MOBILE DEBUG] TTS started speaking');
-                this.debugLog(`Rozpoczynam mówienie: ${text}`);
+                console.log('🔊 Rozpoczęto syntezę mowy');
+                this.debugLog('Synteza mowy rozpoczęta');
             };
             
             utterance.onend = () => {
-                console.log('🟢 [MOBILE DEBUG] TTS ended speaking');
-                this.debugLog('Zakończono mówienie');
+                console.log('🔇 Zakończono syntezę mowy');
+                this.debugLog('Synteza mowy zakończona');
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
             utterance.onerror = (event) => {
-                console.log('🔴 [MOBILE DEBUG] TTS error:', event.error);
+                console.log('❌ Błąd TTS:', event.error);
                 this.debugLog(`Błąd TTS: ${event.error}`);
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
-            console.log('🔵 [MOBILE DEBUG] Starting TTS speak');
+            // Sprawdź czy TTS jest dostępny
+            if (!window.speechSynthesis) {
+                console.log('❌ TTS not supported');
+                this.debugLog('TTS nieobsługiwane');
+                this.setNormalState();
+                this.updateStatus('Synteza mowy niedostępna');
+                resolve();
+                return;
+            }
+            
             window.speechSynthesis.speak(utterance);
         });
+    }
+
+    removeEmojis(text) {
+        if (!text) return '';
+        
+        return text
+            .replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ.,!?;:()\-+=\/]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     setNormalState() {
@@ -350,12 +371,14 @@ class RobotApp {
         this.robotFace.className = 'robot-face';
         const micBtn = document.getElementById('listenBtn');
         micBtn.style.animation = '';
+        micBtn.textContent = '🎤';
     }
 
     setListeningState() {
         this.robotFace.className = 'robot-face listening';
         const micBtn = document.getElementById('listenBtn');
         micBtn.style.animation = 'pulse 1s infinite';
+        micBtn.textContent = '🔴';
     }
 
     setThinkingState() {
@@ -377,13 +400,21 @@ class RobotApp {
 
     debugLog(message) {
         console.log(message);
-        this.debugText.textContent = message;
+        const timestamp = new Date().toLocaleTimeString();
+        this.debugText.innerHTML = `[${timestamp}] ${message}<br>${this.debugText.innerHTML}`;
+        
+        // Ogranicz do 10 wiadomości
+        const lines = this.debugText.innerHTML.split('<br>');
+        if (lines.length > 10) {
+            this.debugText.innerHTML = lines.slice(0, 10).join('<br>');
+        }
     }
 
     toggleFullscreen() {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch(err => {
-                this.debugLog(`Błąd pełnego ekranu: ${err.message}`);
+                console.log('❌ Błąd pełnego ekranu:', err);
+                this.debugLog(`Błąd fullscreen: ${err.message}`);
             });
         } else {
             document.exitFullscreen();
@@ -391,6 +422,14 @@ class RobotApp {
     }
 }
 
+// Inicjalizacja po załadowaniu DOM
 document.addEventListener('DOMContentLoaded', () => {
     new RobotApp();
 });
+
+// Zapobiegaj domyślnej akcji na touch events
+document.addEventListener('touchmove', (e) => {
+    if (e.scale !== 1) {
+        e.preventDefault();
+    }
+}, { passive: false });

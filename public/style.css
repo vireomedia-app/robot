@@ -11,6 +11,10 @@ body {
     height: 100vh;
     user-select: none;
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .app {
@@ -22,6 +26,7 @@ body {
     align-items: center;
     position: relative;
     overflow: hidden;
+    padding: 10px;
 }
 
 /* Twarz robota - RESPONSYWNA */
@@ -75,11 +80,12 @@ body {
 .listening .eye {
     background: #ffeb3b;
     border-color: #ff9800;
+    animation: glow 1.5s infinite alternate;
 }
 
 .listening .pupil {
     background: #ff9800;
-    animation: blink 2s infinite;
+    animation: listening-pupil 2s infinite;
 }
 
 .thinking .mouth {
@@ -92,31 +98,109 @@ body {
     background: #f44336;
 }
 
+.thinking .eye {
+    animation: think-eye 1.5s infinite alternate;
+}
+
+.talking .eye {
+    animation: talk-eye 0.5s infinite alternate;
+}
+
 /* Animacje */
 @keyframes talk {
-    0% { height: 20px; border-radius: 0 0 60px 60px; }
-    100% { height: 50px; border-radius: 0 0 80px 80px; }
+    0% { 
+        height: 20px; 
+        border-radius: 0 0 60px 60px; 
+    }
+    100% { 
+        height: 50px; 
+        border-radius: 0 0 80px 80px; 
+    }
 }
 
 @keyframes think {
-    0% { transform: scaleX(0.8); }
-    100% { transform: scaleX(1.2); }
+    0% { 
+        transform: scaleX(0.8); 
+        background: #4CAF50;
+    }
+    100% { 
+        transform: scaleX(1.2); 
+        background: #2196F3;
+    }
 }
 
 @keyframes blink {
-    0%, 90%, 100% { transform: scaleY(1); }
-    95% { transform: scaleY(0.1); }
+    0%, 90%, 100% { 
+        transform: scaleY(1); 
+    }
+    95% { 
+        transform: scaleY(0.1); 
+    }
 }
 
 @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+    0% { 
+        transform: scale(1); 
+        box-shadow: 0 0 0 0 rgba(255, 100, 100, 0.7);
+    }
+    50% { 
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(255, 100, 100, 0);
+    }
+    100% { 
+        transform: scale(1); 
+        box-shadow: 0 0 0 0 rgba(255, 100, 100, 0);
+    }
+}
+
+@keyframes glow {
+    0% {
+        box-shadow: 0 0 10px #ffeb3b;
+    }
+    100% {
+        box-shadow: 0 0 20px #ff9800, 0 0 30px #ff9800;
+    }
+}
+
+@keyframes listening-pupil {
+    0%, 100% {
+        transform: translate(0, 0) scale(1);
+    }
+    25% {
+        transform: translate(5px, -5px) scale(1.1);
+    }
+    50% {
+        transform: translate(-5px, 5px) scale(1);
+    }
+    75% {
+        transform: translate(-5px, -5px) scale(1.1);
+    }
+}
+
+@keyframes think-eye {
+    0% {
+        transform: translateY(0);
+        background: white;
+    }
+    100% {
+        transform: translateY(-5px);
+        background: #E3F2FD;
+    }
+}
+
+@keyframes talk-eye {
+    0% {
+        transform: scale(1);
+    }
+    100% {
+        transform: scale(1.1);
+    }
 }
 
 .listening #listenBtn {
-    animation: pulse 1s infinite;
-    background: rgba(255, 100, 100, 0.4);
+    animation: pulse 1.5s infinite;
+    background: rgba(255, 100, 100, 0.6);
+    border: 2px solid rgba(255, 255, 255, 0.8);
 }
 
 /* Status - RESPONSYWNY */
@@ -128,6 +212,12 @@ body {
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     min-height: 24px;
     padding: 0 10px;
+    font-weight: 500;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 16px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    max-width: 90%;
 }
 
 /* Kontrolki - POPRAWIONE DLA TELEFONU */
@@ -154,15 +244,21 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+    border: 2px solid rgba(255,255,255,0.2);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 
 .control-btn:hover {
     background: rgba(255,255,255,0.4);
     transform: scale(1.1);
+    border-color: rgba(255,255,255,0.4);
 }
 
 .control-btn:active {
     transform: scale(0.95);
+    background: rgba(255,255,255,0.5);
 }
 
 /* Debug panel - POPRAWIONY */
@@ -170,19 +266,32 @@ body {
     position: fixed;
     top: 10px;
     left: 10px;
-    background: rgba(0,0,0,0.7);
-    color: white;
+    background: rgba(0,0,0,0.8);
+    color: #00ff00;
     padding: 8px;
     border-radius: 5px;
     font-size: 11px;
     max-width: calc(100vw - 40px);
     display: none;
     z-index: 1001;
+    border: 1px solid #00ff00;
+    font-family: 'Courier New', monospace;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 .debug-title {
     font-weight: bold;
     margin-bottom: 5px;
+    color: white;
+    border-bottom: 1px solid #00ff00;
+    padding-bottom: 3px;
+}
+
+#debugText {
+    line-height: 1.3;
+    max-height: 150px;
+    overflow-y: auto;
 }
 
 /* Pełny ekran */
@@ -196,6 +305,14 @@ body {
 
 :fullscreen .controls {
     bottom: 30px;
+}
+
+:-webkit-full-screen .app {
+    padding: 10px;
+}
+
+:-moz-full-screen .app {
+    padding: 10px;
 }
 
 /* Mobile-specific styles */
@@ -216,6 +333,12 @@ body {
     .controls {
         bottom: 15px;
     }
+    
+    .status {
+        margin-top: 10px;
+        font-size: clamp(14px, 3vw, 16px);
+        padding: 6px 12px;
+    }
 }
 
 @media (max-width: 380px) {
@@ -233,6 +356,11 @@ body {
         width: min(250px, 85vw);
         height: min(350px, 85vh);
     }
+    
+    .status {
+        font-size: 14px;
+        padding: 5px 10px;
+    }
 }
 
 @media (max-height: 600px) {
@@ -245,6 +373,10 @@ body {
         margin-top: 10px;
         font-size: 14px;
     }
+    
+    .controls {
+        bottom: 10px;
+    }
 }
 
 /* Landscape orientation */
@@ -253,14 +385,231 @@ body {
         width: min(250px, 40vw);
         height: min(300px, 80vh);
         margin-top: 1vh;
+        transform: scale(0.9);
     }
     
     .controls {
         bottom: 10px;
+        gap: 10px;
     }
     
     .status {
         font-size: 14px;
         margin-top: 5px;
+        padding: 4px 8px;
+    }
+    
+    .control-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+}
+
+/* Tablety */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .robot-face {
+        width: min(400px, 70vw);
+        height: min(500px, 80vh);
+    }
+    
+    .eye {
+        width: min(100px, 15vw);
+        height: min(100px, 15vw);
+    }
+    
+    .mouth {
+        width: min(150px, 30vw);
+        height: 40px;
+    }
+    
+    .controls {
+        bottom: 40px;
+        gap: 25px;
+    }
+    
+    .control-btn {
+        width: 60px;
+        height: 60px;
+        font-size: 24px;
+    }
+}
+
+/* Duże ekrany */
+@media (min-width: 1200px) {
+    .robot-face {
+        width: min(350px, 60vw);
+        height: min(450px, 70vh);
+    }
+}
+
+/* Poprawki dla bardzo małych ekranów */
+@media (max-width: 320px) {
+    .robot-face {
+        width: 95vw;
+        height: 80vh;
+    }
+    
+    .controls {
+        bottom: 10px;
+        gap: 8px;
+    }
+    
+    .control-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .status {
+        font-size: 13px;
+        padding: 4px 8px;
+    }
+}
+
+/* Poprawki dla Safari iOS */
+@supports (-webkit-touch-callout: none) {
+    .control-btn {
+        backdrop-filter: none;
+        background: rgba(255,255,255,0.4);
+    }
+    
+    .status {
+        backdrop-filter: none;
+        background: rgba(0,0,0,0.4);
+    }
+}
+
+/* Animacje ładowania */
+@keyframes loading {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading .robot-face::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    right: -10px;
+    bottom: -10px;
+    border: 3px solid transparent;
+    border-top: 3px solid #fff;
+    border-radius: 50%;
+    animation: loading 1s linear infinite;
+    z-index: 10;
+}
+
+/* Poprawki dostępności */
+@media (prefers-reduced-motion: reduce) {
+    .control-btn,
+    .robot-face,
+    .eye,
+    .pupil,
+    .mouth {
+        transition-duration: 0.1ms;
+        animation-duration: 0.1ms;
+    }
+    
+    .listening #listenBtn {
+        animation: none;
+        background: rgba(255, 100, 100, 0.6);
+    }
+}
+
+/* Ciemny motyw */
+@media (prefers-color-scheme: dark) {
+    body {
+        background: linear-gradient(135deg, #2D3748 0%, #4A5568 100%);
+    }
+    
+    .control-btn {
+        background: rgba(255,255,255,0.2);
+        border-color: rgba(255,255,255,0.1);
+    }
+    
+    .status {
+        background: rgba(0,0,0,0.5);
+        color: #E2E8F0;
+    }
+}
+
+/* Poprawki dla przeglądarek z brakującym wsparciem dla clamp */
+@supports not (width: min(300px, 80vw)) {
+    .robot-face {
+        width: 80vw;
+        max-width: 300px;
+        height: 90vh;
+        max-height: 400px;
+    }
+    
+    .eye {
+        width: 20vw;
+        max-width: 80px;
+        height: 20vw;
+        max-height: 80px;
+    }
+    
+    .mouth {
+        width: 40vw;
+        max-width: 120px;
+    }
+    
+    .status {
+        font-size: 16px;
+    }
+    
+    @media (max-width: 380px) {
+        .status {
+            font-size: 14px;
+        }
+    }
+}
+
+/* Poprawki dla bardzo wysokich ekranów */
+@media (min-height: 1000px) {
+    .robot-face {
+        margin-top: 10vh;
+        transform: scale(1.1);
+    }
+    
+    .controls {
+        bottom: 50px;
+    }
+    
+    .control-btn {
+        width: 70px;
+        height: 70px;
+        font-size: 28px;
+    }
+}
+
+/* Zwiększenie czytelności na jasnym tło (dla niektórych przeglądarek) */
+.control-btn {
+    color: #333;
+    font-weight: bold;
+}
+
+/* Zapobieganie flashowi białego ekranu podczas ładowania */
+body:not(.loaded) {
+    background: #667eea;
+}
+
+/* Poprawki dla stanu focus dla dostępności */
+.control-btn:focus {
+    outline: 3px solid rgba(255,255,255,0.8);
+    outline-offset: 2px;
+}
+
+/* Ukrywanie paska adresu na mobile */
+@media (max-width: 768px) {
+    body {
+        height: 100vh;
+        height: -webkit-fill-available;
+    }
+    
+    .app {
+        height: 100vh;
+        height: -webkit-fill-available;
     }
 }
