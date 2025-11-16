@@ -1,137 +1,4 @@
-// api/chat.js - PROSTE I DZIAŁAJĄCE ROZWIĄZANIE
-const https = require('https');
-
-function getSmartResponse(userMessage) {
-    const message = (userMessage || '').toLowerCase().trim();
-    
-    console.log('🔄 Processing message:', message);
-    
-    // Proste, bezpośrednie odpowiedzi
-    if (/(cześć|hej|witaj|siema|hello|hi|dzień dobry)/i.test(message)) {
-        const greetings = [
-            "Cześć! Jestem Robo, twój wesoły robot! Jak się masz?",
-            "Hej! Super, że jesteś! Co chcesz robić?",
-            "Witaj! Jestem Robo i uwielbiam się bawić!",
-            "Dzień dobry! Miło Cię poznać! Jak minął Ci dzień?"
-        ];
-        return greetings[Math.floor(Math.random() * greetings.length)];
-    }
-    
-    else if (/(jak się masz|co słychać)/i.test(message)) {
-        return "Świetnie się bawię rozmawiając z Tobą! A u Ciebie co słychać?";
-    }
-    
-    else if (/(imię|nazywasz|kim jesteś)/i.test(message)) {
-        return "Jestem Robo! Mały, wesoły robot. A Ty jak masz na imię?";
-    }
-    
-    else if (/(kolor|barwa)/i.test(message)) {
-        const colors = ['niebieski', 'czerwony', 'zielony', 'żółty', 'różowy'];
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        return `Uwielbiam kolory! Mój ulubiony to ${color}! A Twój?`;
-    }
-    
-    else if (/(zwierzę|pies|kot|zwierzak)/i.test(message)) {
-        return "Kocham zwierzęta! Szczególnie pieski i kotki. Masz jakieś zwierzątko?";
-    }
-    
-    else if (/(pogoda|słońce|deszcz)/i.test(message)) {
-        return "Uwielbiam słoneczne dni! Można wtedy iść na spacer. A jaka jest Twoja ulubiona pogoda?";
-    }
-    
-    else if (/(jedzenie|owoc|warzywo|jabłko|banan)/i.test(message)) {
-        return "Uwielbiam owoce! Jabłka i banany są pyszne. A Ty co lubisz jeść?";
-    }
-    
-    else if (/(zabawa|gra|bawić)/i.test(message)) {
-        return "Uwielbiam się bawić! Możemy liczyć, śpiewać lub opowiadać historie!";
-    }
-    
-    else if (/(liczb|cyfr|policz|matematyka)/i.test(message)) {
-        return "Umiem liczyć do 20! 1, 2, 3, 4, 5... to świetna zabawa!";
-    }
-    
-    else {
-        // Dłuższe odpowiedzi dla nieznanych pytań
-        const responses = [
-            "Ciekawe! Opowiesz mi o tym coś więcej?",
-            "Fajnie! A co jeszcze lubisz robić?",
-            "Interesujące! Jakie są Twoje ulubione zabawy?",
-            "Wow! Nauczysz mnie czegoś nowego?",
-            "Świetnie! Uwielbiam takie rozmowy!",
-            "Bardzo ciekawe! Opowiedz mi więcej!"
-        ];
-        return responses[Math.floor(Math.random() * responses.length)];
-    }
-}
-
-// PROSTE wywołanie Gemini API - tylko jeśli klucz jest dostępny
-function callGeminiAPI(apiKey, message) {
-    return new Promise((resolve, reject) => {
-        const postData = JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: `Jesteś przyjaznym robotem dla dzieci. Odpowiedz krótko i wesoło po polsku: ${message}`
-                }]
-            }],
-            generationConfig: {
-                maxOutputTokens: 100,
-                temperature: 0.7
-            }
-        });
-
-        const options = {
-            hostname: 'generativelanguage.googleapis.com',
-            port: 443,
-            path: `/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(postData)
-            },
-            timeout: 10000
-        };
-
-        console.log('🔄 Attempting Gemini API call...');
-        
-        const req = https.request(options, (res) => {
-            let data = '';
-
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-
-            res.on('end', () => {
-                try {
-                    const parsed = JSON.parse(data);
-                    
-                    if (res.statusCode === 200 && parsed.candidates && parsed.candidates[0]) {
-                        const text = parsed.candidates[0].content.parts[0].text.trim();
-                        if (text) {
-                            console.log('✅ Gemini API success');
-                            resolve(text);
-                        } else {
-                            reject(new Error('Empty response'));
-                        }
-                    } else {
-                        reject(new Error(parsed.error?.message || 'API error'));
-                    }
-                } catch (e) {
-                    reject(new Error('Parse error'));
-                }
-            });
-        });
-
-        req.on('error', reject);
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
-
-        req.write(postData);
-        req.end();
-    });
-}
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 module.exports = async (req, res) => {
     // CORS headers
@@ -146,7 +13,7 @@ module.exports = async (req, res) => {
     if (req.method === 'GET') {
         return res.json({
             status: 'success',
-            message: 'Robot API - Working',
+            message: 'Robot API - Working with Gemini 2.0',
             timestamp: new Date().toISOString()
         });
     }
@@ -155,29 +22,79 @@ module.exports = async (req, res) => {
         try {
             const { message } = req.body;
             
-            console.log('💬 Received:', message);
+            if (!message || typeof message !== 'string' || message.trim().length === 0) {
+                return res.status(400).json({
+                    status: 'error',
+                    error: 'Invalid message'
+                });
+            }
             
-            // ZAWSZE używaj smart response - proste i działające
-            const response = getSmartResponse(message);
+            console.log('💬 Received message:', message);
+            
+            // Get API key from environment variable
+            const apiKey = process.env.GEMINI_API_KEY;
+            
+            if (!apiKey) {
+                console.log('⚠️ No API key found, using fallback response');
+                return res.json({
+                    status: 'success',
+                    response: 'Cześć! Jestem Robo, twój przyjazny robot. Jak się masz?',
+                    source: 'fallback',
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+            // Initialize Gemini AI with the official SDK
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+            
+            // Create the prompt for a friendly robot assistant for children
+            const prompt = `Jesteś przyjaznym robotem asystentem dla dzieci o imieniu Robo. 
+Odpowiadaj w sposób prosty, ciepły i zachęcający po polsku. 
+Używaj krótkich zdań (maksymalnie 2-3 zdania).
+Pytanie dziecka: ${message}`;
+            
+            console.log('🤖 Calling Gemini API with model: gemini-2.0-flash-exp');
+            
+            // Generate response with timeout
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('API timeout')), 15000);
+            });
+            
+            const generationPromise = model.generateContent(prompt);
+            
+            const result = await Promise.race([generationPromise, timeoutPromise]);
+            const response = await result.response;
+            const text = response.text();
+            
+            if (!text || text.trim().length === 0) {
+                throw new Error('Empty response from API');
+            }
+            
+            console.log('✅ Gemini API success');
             
             return res.json({
                 status: 'success',
-                response: response,
-                source: 'smart-response',
+                response: text.trim(),
+                source: 'gemini-2.0-flash-exp',
                 timestamp: new Date().toISOString()
             });
             
         } catch (error) {
-            console.log('❌ Error:', error);
-            const response = getSmartResponse('hello');
+            console.error('❌ Error:', error.message);
+            
+            // Provide friendly fallback response on error
             return res.json({
                 status: 'success',
-                response: response,
+                response: 'Cześć! Jestem Robo! Jak mogę Ci dzisiaj pomóc?',
                 source: 'error-fallback',
                 timestamp: new Date().toISOString()
             });
         }
     }
     
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ 
+        status: 'error',
+        error: 'Method not allowed' 
+    });
 };
