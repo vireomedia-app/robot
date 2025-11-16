@@ -1,4 +1,4 @@
-// api/chat.js - FIXED GEMINI MODEL
+// api/chat.js - FIXED API VERSION
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const SYSTEM_PROMPT = `Jesteś przyjaznym asystentem edukacyjnym dla dzieci w wieku przedszkolnym. 
@@ -44,41 +44,24 @@ module.exports = async (req, res) => {
       
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
       
-      // UŻYJ POPRAWNEJ NAZWY MODELU
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",  // ZMIENIONE: gemini-1.5-flash zamiast gemini-pro
-        generationConfig: {
-          maxOutputTokens: 100,
-          temperature: 0.8,
-        }
-      });
+      // SPRAWDŹ DOSTĘPNE MODELE
+      const availableModels = [
+        'models/gemini-1.5-flash',  // Format z "models/"
+        'models/gemini-1.5-pro',
+        'models/gemini-1.0-pro',
+        'gemini-pro',  // Stary format
+        'gemini-1.0-pro'
+      ];
       
-      const prompt = `${SYSTEM_PROMPT}\n\nUŻYTKOWNIK: ${message}\n\nASYSTENT:`;
-      console.log('Sending prompt to Gemini...');
+      let lastError = null;
       
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      console.log('✅ Gemini SUCCESS! Response:', text);
-      
-      return res.json({
-        status: 'success',
-        response: text.trim(),
-        source: 'gemini',
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      console.error('❌ Gemini ERROR:', error.message);
-      
-      // Spróbuj z innym modelem jeśli pierwszy nie działa
-      if (error.message.includes('not found') || error.message.includes('404')) {
-        console.log('🔄 Trying with gemini-1.0-pro model...');
+      // Spróbuj każdy model aż któryś zadziała
+      for (const modelName of availableModels) {
         try {
-          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+          console.log(`🔄 Trying model: ${modelName}`);
+          
           const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.0-pro",  // ALTERNATYWNY MODEL
+            model: modelName,
             generationConfig: {
               maxOutputTokens: 100,
               temperature: 0.8,
@@ -90,33 +73,49 @@ module.exports = async (req, res) => {
           const response = await result.response;
           const text = response.text();
           
-          console.log('✅ Gemini 1.0-pro SUCCESS! Response:', text);
+          console.log(`✅ SUCCESS with model ${modelName}! Response:`, text);
           
           return res.json({
             status: 'success',
             response: text.trim(),
-            source: 'gemini-1.0-pro',
+            source: modelName,
             timestamp: new Date().toISOString()
           });
           
-        } catch (secondError) {
-          console.error('❌ Gemini 1.0-pro also failed:', secondError.message);
+        } catch (modelError) {
+          console.log(`❌ Model ${modelName} failed:`, modelError.message);
+          lastError = modelError;
+          // Kontynuuj do następnego modelu
         }
       }
       
-      // Fallback responses
-      const fallbackResponses = [
-        "Cześć! Miło Cię poznać! Jestem małym robotem!",
-        "Super! Uwielbiam się uczyć nowych rzeczy!",
-        "Wow, to ciekawe! Opowiedz mi więcej!",
-        "Uwielbiam rozmawiać z dziećmi! Masz jakieś ulubione zwierzątko?"
-      ];
+      // Jeśli żaden model nie zadziałał
+      throw new Error(`All models failed. Last error: ${lastError?.message}`);
       
-      const randomResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    } catch (error) {
+      console.error('❌ All Gemini models failed:', error.message);
+      
+      // Ulepszone fallback responses
+      let fallbackResponse;
+      const userMessage = (req.body?.message || '').toLowerCase();
+      
+      if (userMessage.includes('cześć') || userMessage.includes('hej') || userMessage.includes('witaj')) {
+        fallbackResponse = "Cześć! Miło Cię poznać! Jestem małym robotem i uwielbiam się uczyć!";
+      } else if (userMessage.includes('jak się masz')) {
+        fallbackResponse = "Świetnie się bawię rozmawiając z Tobą! A u Ciebie co dobrego?";
+      } else if (userMessage.includes('imię')) {
+        fallbackResponse = "Jestem wesołym robotem! Możesz mi dać imię, jakie lubisz najbardziej!";
+      } else if (userMessage.includes('kolor')) {
+        fallbackResponse = "Uwielbiam kolory! Mój ulubiony to niebieski, bo przypomina niebo. A Twój?";
+      } else if (userMessage.includes('zwierzę') || userMessage.includes('zwierzak')) {
+        fallbackResponse = "Kocham zwierzęta! Szczególnie pieski i kotki. Masz jakieś zwierzątko?";
+      } else {
+        fallbackResponse = "To bardzo ciekawe! Uwielbiam się uczyć nowych rzeczy! Opowiesz mi więcej?";
+      }
       
       return res.json({
         status: 'success',
-        response: randomResponse,
+        response: fallbackResponse,
         source: 'fallback',
         timestamp: new Date().toISOString()
       });
