@@ -1,5 +1,5 @@
-// api/chat.js - NATIVE HTTP MODULE (no dependencies)
-const https = require('https');
+// api/chat.js - USING CORRECT GEMINI 2.5 MODEL
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const SYSTEM_PROMPT = `Jesteś przyjaznym asystentem edukacyjnym dla dzieci w wieku przedszkolnym. 
 Twoim zadaniem jest pomagać w nauce przez zabawę.
@@ -12,65 +12,9 @@ ZASADY:
 
 TERAZ ODPOWIEDZ:`;
 
-function makeGeminiRequest(apiKey, message) {
-  return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({
-      contents: [{
-        parts: [{
-          text: `${SYSTEM_PROMPT}\n\nUŻYTKOWNIK: ${message}\n\nASYSTENT:`
-        }]
-      }],
-      generationConfig: {
-        maxOutputTokens: 100,
-        temperature: 0.8,
-      }
-    });
-
-    const options = {
-      hostname: 'generativelanguage.googleapis.com',
-      port: 443,
-      path: `/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
-      }
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode === 200 && parsed.candidates && parsed.candidates[0]) {
-            resolve(parsed.candidates[0].content.parts[0].text);
-          } else {
-            reject(new Error(`API Error: ${parsed.error?.message || 'Unknown error'}`));
-          }
-        } catch (e) {
-          reject(new Error('Failed to parse API response'));
-        }
-      });
-    });
-
-    req.on('error', (error) => {
-      reject(error);
-    });
-
-    req.write(postData);
-    req.end();
-  });
-}
-
 module.exports = async (req, res) => {
-  console.log('🎯 API Request received - Native HTTP Version');
+  console.log('🎯 API Request received - Gemini 2.5 Version');
   
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -82,7 +26,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     return res.json({
       status: 'success',
-      message: '🤖 Robot API with Native HTTP',
+      message: '🤖 Robot API with Gemini 2.5',
       timestamp: new Date().toISOString()
     });
   }
@@ -96,22 +40,39 @@ module.exports = async (req, res) => {
         throw new Error('GEMINI_API_KEY not configured');
       }
       
-      console.log('🔑 API key found, making native HTTP request...');
+      console.log('🔑 API key found, calling Gemini 2.5...');
       
-      const geminiResponse = await makeGeminiRequest(process.env.GEMINI_API_KEY, message);
-      console.log('✅ Gemini SUCCESS! Response:', geminiResponse);
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      
+      // UŻYJ POPRAWNEGO MODELU Z TWOJEGO KONTA
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.5-flash",  // TEN MODEL JEST DOSTĘPNY W TWOIM KONCIE!
+        generationConfig: {
+          maxOutputTokens: 100,
+          temperature: 0.8,
+        }
+      });
+      
+      const prompt = `${SYSTEM_PROMPT}\n\nUŻYTKOWNIK: ${message}\n\nASYSTENT:`;
+      console.log('Sending to Gemini 2.5...');
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('✅ Gemini 2.5 SUCCESS! Response:', text);
       
       return res.json({
         status: 'success',
-        response: geminiResponse.trim(),
-        source: 'gemini-native-http',
+        response: text.trim(),
+        source: 'gemini-2.5-flash',
         timestamp: new Date().toISOString()
       });
       
     } catch (error) {
-      console.error('❌ Gemini API failed:', error.message);
+      console.error('❌ Gemini 2.5 failed:', error.message);
       
-      // Inteligentne fallback
+      // Fallback na wypadek błędu
       const userMessage = (req.body?.message || '').toLowerCase();
       let fallbackResponse;
       
