@@ -1,5 +1,5 @@
-// api/chat.js - NAPRAWIONA WERSJA Z GEMINI API
-const https = require('https');
+// api/chat.js - WERSJA Z OFICJALNĄ BIBLIOTEKĄ @google/generative-ai
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 function getSmartResponse(userMessage) {
     const message = (userMessage || '').toLowerCase().trim();
@@ -65,82 +65,42 @@ function getSmartResponse(userMessage) {
     }
 }
 
-// NAPRAWIONE wywołanie Gemini API
-function callGeminiAPI(apiKey, message) {
-    return new Promise((resolve, reject) => {
-        const postData = JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: `Jesteś przyjaznym robotem dla dzieci o imieniu Robo. Odpowiedz krótko i wesoło po polsku (maksymalnie 2-3 zdania): ${message}`
-                }]
-            }],
+// Wywołanie Gemini API z oficjalną biblioteką
+async function callGeminiAPI(apiKey, message) {
+    try {
+        console.log('🔄 Calling Gemini API with official SDK...');
+        
+        // Inicjalizacja klienta Gemini
+        const genAI = new GoogleGenerativeAI(apiKey);
+        
+        // Używamy modelu gemini-2.0-flash-exp (najnowszy stabilny model)
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.0-flash-exp",
             generationConfig: {
                 maxOutputTokens: 150,
-                temperature: 0.8
+                temperature: 0.8,
             }
         });
 
-        // NAPRAWIONE: Gemini 1.5 modele wycofane 29.04.2025
-        // Aktualne modele: gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash (backup)
-        // API używa wersji v1beta
-        const options = {
-            hostname: 'generativelanguage.googleapis.com',
-            port: 443,
-            path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(postData)
-            },
-            timeout: 15000
-        };
-
-        console.log('🔄 Calling Gemini API...');
+        // Przygotowanie promptu
+        const prompt = `Jesteś przyjaznym robotem dla dzieci o imieniu Robo. Odpowiedz krótko i wesoło po polsku (maksymalnie 2-3 zdania): ${message}`;
         
-        const req = https.request(options, (res) => {
-            let data = '';
-
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-
-            res.on('end', () => {
-                try {
-                    const parsed = JSON.parse(data);
-                    
-                    if (res.statusCode === 200 && parsed.candidates && parsed.candidates[0]) {
-                        const text = parsed.candidates[0].content.parts[0].text.trim();
-                        if (text) {
-                            console.log('✅ Gemini API success');
-                            resolve(text);
-                        } else {
-                            reject(new Error('Empty response'));
-                        }
-                    } else {
-                        console.log('❌ Gemini API error:', parsed.error?.message || 'Unknown error');
-                        reject(new Error(parsed.error?.message || 'API error'));
-                    }
-                } catch (e) {
-                    console.log('❌ Parse error:', e.message);
-                    reject(new Error('Parse error'));
-                }
-            });
-        });
-
-        req.on('error', (error) => {
-            console.log('❌ Request error:', error.message);
-            reject(error);
-        });
+        // Wywołanie API
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
         
-        req.on('timeout', () => {
-            console.log('❌ Request timeout');
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
-
-        req.write(postData);
-        req.end();
-    });
+        if (text && text.trim()) {
+            console.log('✅ Gemini API success');
+            return text.trim();
+        } else {
+            throw new Error('Empty response from Gemini');
+        }
+        
+    } catch (error) {
+        console.log('❌ Gemini API error:', error.message);
+        throw error;
+    }
 }
 
 module.exports = async (req, res) => {
