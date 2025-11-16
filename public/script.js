@@ -3,9 +3,7 @@ class RobotApp {
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
-        this.continuousMode = false; // Track if continuous listening mode is active
         this.recognition = null;
-        this.conversationHistory = []; // Store conversation history for context
         
         this.robotFace = document.getElementById('robotFace');
         this.mouth = document.getElementById('mouth');
@@ -66,36 +64,17 @@ class RobotApp {
         this.recognition.onerror = (event) => {
             console.log('❌ Recognition error:', event.error);
             this.isListening = false;
+            this.setNormalState();
             
-            // Critical errors should stop continuous mode
-            if (event.error === 'not-allowed' || event.error === 'no-speech') {
-                if (event.error === 'not-allowed') {
-                    this.continuousMode = false;
-                    this.setNormalState();
-                    this.updateStatus('Brak uprawnień do mikrofonu');
-                } else if (event.error === 'no-speech' && this.continuousMode) {
-                    // In continuous mode, no-speech is expected, just restart
-                    console.log('🔄 No speech detected, restarting in continuous mode');
-                    setTimeout(() => {
-                        if (this.continuousMode) {
-                            this.startListening();
-                        }
-                    }, 500);
-                    return;
-                } else {
-                    this.setNormalState();
-                    this.updateStatus('Błąd rozpoznawania mowy');
-                }
+            if (event.error === 'not-allowed') {
+                this.updateStatus('Brak uprawnień do mikrofonu');
             } else {
-                this.setNormalState();
                 this.updateStatus('Błąd rozpoznawania mowy');
             }
             
-            if (!this.continuousMode) {
-                setTimeout(() => {
-                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
-                }, 2000);
-            }
+            setTimeout(() => {
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+            }, 2000);
         };
 
         this.recognition.onend = () => {
@@ -190,20 +169,11 @@ class RobotApp {
     }
 
     toggleListening() {
-        if (this.continuousMode) {
-            // Stop continuous mode
-            console.log('🔵 Stopping continuous mode');
-            this.continuousMode = false;
-            if (this.isListening) {
-                this.recognition.stop();
-            }
+        if (this.isListening) {
+            this.recognition.stop();
             this.setNormalState();
-            this.updateStatus('Tryb ciągły wyłączony - Kliknij 🎤 aby rozmawiać');
+            this.updateStatus('Anulowano');
         } else {
-            // Start continuous mode
-            console.log('🟢 Starting continuous mode');
-            this.continuousMode = true;
-            this.updateStatus('Tryb ciągły aktywny');
             this.startListening();
         }
     }
@@ -217,49 +187,23 @@ class RobotApp {
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
-        this.continuousMode = false; // Turn off continuous mode on reset
-        this.conversationHistory = []; // Clear conversation history on reset
         
         this.setNormalState();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
-        
-        console.log('🔄 Conversation history cleared');
     }
 
     async processUserInput(text) {
         console.log('🧠 Processing:', text);
         this.setThinkingState();
         
-        // Add user message to conversation history
-        this.conversationHistory.push({
-            role: 'user',
-            content: text
-        });
-        console.log(`📝 History length: ${this.conversationHistory.length} messages`);
-        
         try {
             const response = await this.sendToAI(text);
             console.log('🤖 Response:', response);
-            
-            // Add assistant response to conversation history
-            this.conversationHistory.push({
-                role: 'assistant',
-                content: response
-            });
-            
             await this.speakResponse(response);
         } catch (error) {
             console.log('❌ Process error:', error);
             this.updateStatus('Błąd przetwarzania');
-            const errorResponse = 'Przepraszam, spróbuj ponownie.';
-            
-            // Add error response to history
-            this.conversationHistory.push({
-                role: 'assistant',
-                content: errorResponse
-            });
-            
-            await this.speakResponse(errorResponse);
+            this.speakResponse('Przepraszam, spróbuj ponownie.');
         }
     }
 
@@ -270,10 +214,7 @@ class RobotApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
-                    message: userText,
-                    history: this.conversationHistory // Send full conversation history
-                })
+                body: JSON.stringify({ message: userText })
             });
 
             if (!response.ok) {
@@ -307,43 +248,14 @@ class RobotApp {
             utterance.pitch = 1.0;
             
             utterance.onend = () => {
-                console.log('🗣️ Finished speaking');
-                
-                // If continuous mode is active, automatically start listening again
-                if (this.continuousMode) {
-                    console.log('🔄 Continuous mode: restarting listening');
-                    this.setNormalState();
-                    this.updateStatus('Tryb ciągły: Słucham dalej...');
-                    // Small delay before starting next listening session
-                    setTimeout(() => {
-                        if (this.continuousMode) { // Check again in case user stopped it
-                            this.startListening();
-                        }
-                    }, 500);
-                } else {
-                    this.setNormalState();
-                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
-                }
+                this.setNormalState();
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
             utterance.onerror = () => {
-                console.log('❌ Speech synthesis error');
-                
-                // If continuous mode is active, try to continue anyway
-                if (this.continuousMode) {
-                    console.log('🔄 Continuous mode: restarting after error');
-                    this.setNormalState();
-                    this.updateStatus('Tryb ciągły: Słucham dalej...');
-                    setTimeout(() => {
-                        if (this.continuousMode) {
-                            this.startListening();
-                        }
-                    }, 500);
-                } else {
-                    this.setNormalState();
-                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
-                }
+                this.setNormalState();
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
@@ -357,17 +269,8 @@ class RobotApp {
         this.isTalking = false;
         this.robotFace.className = 'robot-face';
         const micBtn = document.getElementById('listenBtn');
-        
-        // Update button based on continuous mode status
-        if (this.continuousMode) {
-            micBtn.style.animation = 'pulse 2s infinite';
-            micBtn.style.backgroundColor = '#4CAF50'; // Green background for continuous mode
-            micBtn.textContent = '🟢';
-        } else {
-            micBtn.style.animation = '';
-            micBtn.style.backgroundColor = '';
-            micBtn.textContent = '🎤';
-        }
+        micBtn.style.animation = '';
+        micBtn.textContent = '🎤';
     }
 
     setListeningState() {

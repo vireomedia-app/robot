@@ -1,18 +1,31 @@
-// api/chat.js - PROSTE I DZIAŁAJĄCE ROZWIĄZANIE
-const https = require('https');
+// api/chat.js - FIXED VERSION WITH GEMINI API INTEGRATION
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-function getSmartResponse(userMessage, conversationHistory = []) {
+// Initialize Gemini API
+let genAI = null;
+let model = null;
+
+try {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (apiKey) {
+        genAI = new GoogleGenerativeAI(apiKey);
+        model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+        console.log('✅ Gemini API initialized with model: gemini-2.0-flash-exp');
+    } else {
+        console.log('⚠️ No API key found - using fallback responses');
+    }
+} catch (error) {
+    console.log('⚠️ Gemini API initialization error:', error.message);
+}
+
+// Fallback pattern matching responses (used when API is unavailable or fails)
+function getSmartResponse(userMessage) {
     const message = (userMessage || '').toLowerCase().trim();
     
-    console.log('🔄 Processing message:', message);
-    console.log('📝 History entries:', conversationHistory.length);
+    console.log('🔄 Using fallback response for:', message);
     
-    // Count how many user messages are in the history (before current one)
-    const previousUserMessages = conversationHistory.filter(msg => msg.role === 'user').length;
-    const isFirstMessage = previousUserMessages <= 1; // Current message is included, so <= 1
-    
-    // Only greet if this is the first message in the conversation
-    if (/(cześć|hej|witaj|siema|hello|hi|dzień dobry)/i.test(message) && isFirstMessage) {
+    // Pattern-based responses
+    if (/(cześć|hej|witaj|siema|hello|hi|dzień dobry)/i.test(message)) {
         const greetings = [
             "Cześć! Jestem Robo, twój wesoły robot! Jak się masz?",
             "Hej! Super, że jesteś! Co chcesz robić?",
@@ -22,27 +35,12 @@ function getSmartResponse(userMessage, conversationHistory = []) {
         return greetings[Math.floor(Math.random() * greetings.length)];
     }
     
-    // If it's a greeting but NOT the first message, respond naturally without re-introducing
-    if (/(cześć|hej|witaj|siema|hello|hi|dzień dobry)/i.test(message) && !isFirstMessage) {
-        const continuingGreetings = [
-            "Tak, rozmawiamy dalej! Co chcesz teraz robić?",
-            "Jestem tu! O czym chcesz pogadać?",
-            "Słucham Cię! Powiedz mi coś ciekawego!",
-            "Tak? Co się stało?"
-        ];
-        return continuingGreetings[Math.floor(Math.random() * continuingGreetings.length)];
-    }
-    
     else if (/(jak się masz|co słychać)/i.test(message)) {
         return "Świetnie się bawię rozmawiając z Tobą! A u Ciebie co słychać?";
     }
     
     else if (/(imię|nazywasz|kim jesteś)/i.test(message)) {
-        if (isFirstMessage) {
-            return "Jestem Robo! Mały, wesoły robot. A Ty jak masz na imię?";
-        } else {
-            return "Mówiłem już - jestem Robo! A Ty nadal nie powiedziałeś jak masz na imię!";
-        }
+        return "Jestem Robo! Mały, wesoły robot. A Ty jak masz na imię?";
     }
     
     else if (/(kolor|barwa)/i.test(message)) {
@@ -71,8 +69,19 @@ function getSmartResponse(userMessage, conversationHistory = []) {
         return "Umiem liczyć do 20! 1, 2, 3, 4, 5... to świetna zabawa!";
     }
     
+    else if (/(ile|jak wiele|jak dużo)/i.test(message)) {
+        // Handle counting questions
+        if (/(dni|dzień)/i.test(message) && /(rok|roku)/i.test(message)) {
+            return "W roku jest 365 dni! A w roku przestępnym 366 dni. Czy wiesz, kiedy jest rok przestępny?";
+        }
+        if (/(miesięcy|miesiące)/i.test(message)) {
+            return "W roku jest 12 miesięcy! Styczeń, luty, marzec... Jaki jest twój ulubiony miesiąc?";
+        }
+        return "To ciekawe pytanie! Lubię liczyć różne rzeczy. Co chciałbyś policzyć?";
+    }
+    
     else {
-        // Dłuższe odpowiedzi dla nieznanych pytań
+        // Generic responses for unknown patterns
         const responses = [
             "Ciekawe! Opowiesz mi o tym coś więcej?",
             "Fajnie! A co jeszcze lubisz robić?",
@@ -85,74 +94,41 @@ function getSmartResponse(userMessage, conversationHistory = []) {
     }
 }
 
-// PROSTE wywołanie Gemini API - tylko jeśli klucz jest dostępny
-function callGeminiAPI(apiKey, message) {
-    return new Promise((resolve, reject) => {
-        const postData = JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: `Jesteś przyjaznym robotem dla dzieci. Odpowiedz krótko i wesoło po polsku: ${message}`
-                }]
-            }],
-            generationConfig: {
-                maxOutputTokens: 100,
-                temperature: 0.7
-            }
-        });
+// Call Gemini API with proper error handling
+async function callGeminiAPI(message) {
+    if (!model) {
+        throw new Error('Gemini model not initialized');
+    }
 
-        const options = {
-            hostname: 'generativelanguage.googleapis.com',
-            port: 443,
-            path: `/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(postData)
-            },
-            timeout: 10000
-        };
+    console.log('🚀 Calling Gemini API for:', message);
 
-        console.log('🔄 Attempting Gemini API call...');
-        
-        const req = https.request(options, (res) => {
-            let data = '';
+    try {
+        // Create a friendly, child-appropriate prompt
+        const prompt = `Jesteś Robo - przyjazny, wesoły robot towarzysz dla dzieci w wieku 5-10 lat. 
+Odpowiadaj zawsze po polsku, w sposób prosty, ciepły i entuzjastyczny.
+Używaj prostych słów i krótkich zdań (maksymalnie 2-3 zdania).
+Bądź ciekawy, zadawaj pytania zwrotne, zachęcaj do rozmowy.
+Pytanie dziecka: ${message}
+Odpowiedz:`;
 
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
 
-            res.on('end', () => {
-                try {
-                    const parsed = JSON.parse(data);
-                    
-                    if (res.statusCode === 200 && parsed.candidates && parsed.candidates[0]) {
-                        const text = parsed.candidates[0].content.parts[0].text.trim();
-                        if (text) {
-                            console.log('✅ Gemini API success');
-                            resolve(text);
-                        } else {
-                            reject(new Error('Empty response'));
-                        }
-                    } else {
-                        reject(new Error(parsed.error?.message || 'API error'));
-                    }
-                } catch (e) {
-                    reject(new Error('Parse error'));
-                }
-            });
-        });
+        if (!text || text.trim().length === 0) {
+            throw new Error('Empty response from API');
+        }
 
-        req.on('error', reject);
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
+        console.log('✅ Gemini API success:', text.substring(0, 50) + '...');
+        return text.trim();
 
-        req.write(postData);
-        req.end();
-    });
+    } catch (error) {
+        console.log('❌ Gemini API error:', error.message);
+        throw error;
+    }
 }
 
+// Main request handler
 module.exports = async (req, res) => {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -163,42 +139,78 @@ module.exports = async (req, res) => {
         return res.status(200).end();
     }
     
+    // Health check endpoint
     if (req.method === 'GET') {
         return res.json({
             status: 'success',
             message: 'Robot API - Working',
+            apiEnabled: model !== null,
+            model: model ? 'gemini-2.0-flash-exp' : 'fallback',
             timestamp: new Date().toISOString()
         });
     }
     
+    // Handle chat messages
     if (req.method === 'POST') {
         try {
-            const { message, history } = req.body;
+            const { message } = req.body;
             
-            console.log('💬 Received:', message);
-            console.log('📜 History length:', history ? history.length : 0);
+            if (!message || typeof message !== 'string') {
+                return res.status(400).json({
+                    status: 'error',
+                    error: 'Invalid message format'
+                });
+            }
             
-            // Pass conversation history to maintain context
-            const response = getSmartResponse(message, history || []);
+            console.log('💬 Received message:', message);
+            
+            let response;
+            let source;
+            
+            // Try Gemini API first, fall back to pattern matching if it fails
+            if (model) {
+                try {
+                    response = await callGeminiAPI(message);
+                    source = 'gemini-api';
+                } catch (apiError) {
+                    console.log('⚠️ API failed, using fallback:', apiError.message);
+                    response = getSmartResponse(message);
+                    source = 'fallback-after-error';
+                }
+            } else {
+                // No API key configured, use fallback
+                response = getSmartResponse(message);
+                source = 'fallback-no-api';
+            }
+            
+            console.log('📤 Sending response from:', source);
             
             return res.json({
                 status: 'success',
                 response: response,
-                source: 'smart-response',
+                source: source,
                 timestamp: new Date().toISOString()
             });
             
         } catch (error) {
-            console.log('❌ Error:', error);
-            const response = getSmartResponse('hello', []);
+            console.log('❌ Handler error:', error);
+            
+            // Even in case of unexpected errors, provide a fallback response
+            const fallbackResponse = getSmartResponse('hello');
+            
             return res.json({
                 status: 'success',
-                response: response,
+                response: fallbackResponse,
                 source: 'error-fallback',
+                error: error.message,
                 timestamp: new Date().toISOString()
             });
         }
     }
     
-    return res.status(405).json({ error: 'Method not allowed' });
+    // Method not allowed
+    return res.status(405).json({ 
+        status: 'error',
+        error: 'Method not allowed' 
+    });
 };
