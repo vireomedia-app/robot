@@ -108,6 +108,17 @@ body {
     95% { transform: scaleY(0.1); }
 }
 
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.listening #listenBtn {
+    animation: pulse 1s infinite;
+    background: rgba(255, 100, 100, 0.4);
+}
+
 /* Status - RESPONSYWNY */
 .status {
     margin-top: 20px;

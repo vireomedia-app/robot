@@ -33,6 +33,7 @@ class RobotApp {
         
         if (!SpeechRecognition) {
             this.updateStatus('Przeglądarka nie obsługuje rozpoznawania mowy');
+            this.debugLog('SpeechRecognition not supported');
             return;
         }
 
@@ -43,10 +44,10 @@ class RobotApp {
         this.recognition.maxAlternatives = 1;
 
         this.recognition.onstart = () => {
+            console.log('🟢 [MOBILE DEBUG] Recognition started');
             this.isListening = true;
             this.setListeningState();
             this.updateStatus('Mów teraz...');
-            this.debugLog('Speech recognition started');
             this.startSpeechTimeout();
         };
 
@@ -68,24 +69,24 @@ class RobotApp {
             this.lastSpeechTime = Date.now();
             
             if (finalText) {
-                this.debugLog(`Rozpoznano FINAL: ${finalText}`);
+                console.log('🟢 [MOBILE DEBUG] Final text:', finalText);
                 this.processFinalText(finalText);
             } else if (interimText) {
-                this.debugLog(`Rozpoznano INTERIM: ${interimText}`);
+                console.log('🔵 [MOBILE DEBUG] Interim text:', interimText);
                 this.updateStatus(`Słyszę: "${interimText}"`);
                 this.startSpeechTimeout();
             }
         };
 
         this.recognition.onerror = (event) => {
-            this.debugLog(`Błąd rozpoznawania: ${event.error}`);
+            console.log('🔴 [MOBILE DEBUG] Recognition error:', event.error);
             clearTimeout(this.speechTimeout);
             this.setNormalState();
             this.updateStatus('Kliknij 🎤 aby rozmawiać');
         };
 
         this.recognition.onend = () => {
-            this.debugLog('Speech recognition ended');
+            console.log('🟢 [MOBILE DEBUG] Recognition ended');
             clearTimeout(this.speechTimeout);
             this.isListening = false;
             
@@ -99,7 +100,7 @@ class RobotApp {
     startSpeechTimeout() {
         clearTimeout(this.speechTimeout);
         this.speechTimeout = setTimeout(() => {
-            this.debugLog('Speech timeout - no speech detected');
+            console.log('🟡 [MOBILE DEBUG] Speech timeout - no speech detected');
             if (this.isListening) {
                 this.recognition.stop();
             }
@@ -107,14 +108,22 @@ class RobotApp {
     }
 
     async processFinalText(text) {
+        console.log('🔵 [MOBILE DEBUG] processFinalText started:', text);
         this.updateStatus(`Usłyszałem: "${text}"`);
         
         try {
             this.recognition.stop();
-        } catch (e) {}
+            console.log('🟢 [MOBILE DEBUG] Recognition stopped');
+        } catch (e) {
+            console.log('🟡 [MOBILE DEBUG] Error stopping recognition:', e);
+        }
         
         this.isListening = false;
+        console.log('🔵 [MOBILE DEBUG] Calling processUserInput');
+        
         await this.processUserInput(text);
+        
+        console.log('🟢 [MOBILE DEBUG] processFinalText completed');
     }
 
     setupEventListeners() {
@@ -180,6 +189,7 @@ class RobotApp {
 
     startListening() {
         if (this.isListening || this.isThinking || this.isTalking) {
+            console.log('🟡 [MOBILE DEBUG] Cannot start - busy');
             return;
         }
         
@@ -198,9 +208,9 @@ class RobotApp {
         setTimeout(() => {
             try {
                 this.recognition.start();
-                this.debugLog('Manual start listening');
+                console.log('🟢 [MOBILE DEBUG] Manual start listening');
             } catch (error) {
-                this.debugLog(`Błąd startu: ${error}`);
+                console.log('🔴 [MOBILE DEBUG] Start error:', error);
                 this.updateStatus('Błąd mikrofonu');
                 this.setNormalState();
             }
@@ -209,7 +219,7 @@ class RobotApp {
 
     toggleListening() {
         if (this.isListening) {
-            this.debugLog('Manual stop - user clicked mic again');
+            console.log('🟢 [MOBILE DEBUG] Manual stop - user clicked mic again');
             clearTimeout(this.speechTimeout);
             this.recognition.stop();
             this.setNormalState();
@@ -234,26 +244,37 @@ class RobotApp {
         this.isTalking = false;
         this.setNormalState();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
-        this.debugLog('Manual reset');
+        console.log('🟢 [MOBILE DEBUG] Manual reset');
     }
 
     async processUserInput(text) {
+        console.log('🔵 [MOBILE DEBUG] processUserInput started:', text);
         this.setThinkingState();
         
         try {
+            console.log('🔵 [MOBILE DEBUG] Calling sendToAI');
             const response = await this.sendToAI(text);
+            console.log('🟢 [MOBILE DEBUG] sendToAI completed:', response);
+            
+            console.log('🔵 [MOBILE DEBUG] Calling speakResponse');
             await this.speakResponse(response);
+            console.log('🟢 [MOBILE DEBUG] speakResponse completed');
+            
         } catch (error) {
+            console.log('🔴 [MOBILE DEBUG] Error in processUserInput:', error);
             this.debugLog(`Błąd przetwarzania: ${error}`);
             this.updateStatus('Błąd przetwarzania');
             this.speakResponse('Przepraszam, wystąpił błąd. Spróbuj ponownie.');
         }
+        
+        console.log('🟢 [MOBILE DEBUG] processUserInput completed');
     }
 
     async sendToAI(userText) {
-        this.debugLog(`📤 Wysyłanie: "${userText}"`);
+        console.log('🔵 [MOBILE DEBUG] sendToAI started:', userText);
         
         try {
+            console.log('🔵 [MOBILE DEBUG] Making fetch request to /api/chat');
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
@@ -262,24 +283,26 @@ class RobotApp {
                 body: JSON.stringify({ message: userText })
             });
 
-            this.debugLog(`📥 Status odpowiedzi: ${response.status}`);
+            console.log('🟢 [MOBILE DEBUG] Fetch completed, status:', response.status);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
-            this.debugLog(`✅ Otrzymano: ${data.response}`);
+            console.log('🟢 [MOBILE DEBUG] Response data:', data);
             
             return data.response;
             
         } catch (error) {
-            this.debugLog(`💥 Błąd fetch: ${error.message}`);
+            console.log('🔴 [MOBILE DEBUG] Fetch error:', error);
             return 'Przepraszam, nie mogę się teraz połączyć z systemem. Spróbuj ponownie.';
         }
     }
 
     async speakResponse(text) {
+        console.log('🔵 [MOBILE DEBUG] speakResponse started:', text);
+        
         if (this.isListening) {
             this.recognition.stop();
         }
@@ -288,16 +311,19 @@ class RobotApp {
         this.setTalkingState();
         
         return new Promise((resolve) => {
+            console.log('🔵 [MOBILE DEBUG] Creating utterance');
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'pl-PL';
             utterance.rate = 0.9;
             utterance.pitch = 1.0;
             
             utterance.onstart = () => {
+                console.log('🟢 [MOBILE DEBUG] TTS started speaking');
                 this.debugLog(`Rozpoczynam mówienie: ${text}`);
             };
             
             utterance.onend = () => {
+                console.log('🟢 [MOBILE DEBUG] TTS ended speaking');
                 this.debugLog('Zakończono mówienie');
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
@@ -305,15 +331,15 @@ class RobotApp {
             };
             
             utterance.onerror = (event) => {
+                console.log('🔴 [MOBILE DEBUG] TTS error:', event.error);
                 this.debugLog(`Błąd TTS: ${event.error}`);
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
-            setTimeout(() => {
-                window.speechSynthesis.speak(utterance);
-            }, 100);
+            console.log('🔵 [MOBILE DEBUG] Starting TTS speak');
+            window.speechSynthesis.speak(utterance);
         });
     }
 
