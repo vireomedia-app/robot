@@ -1,8 +1,6 @@
 {
   "name": "robot-assistant",
   "version": "1.0.0",
-  "description": "Robot assistant with Gemini AI",
-  "dependencies": {
-    "@google/generative-ai": "^0.2.1"
-  }
+  "description": "Robot assistant",
+  "dependencies": {}
 }

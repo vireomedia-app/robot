@@ -4,7 +4,6 @@ class RobotApp {
         this.isThinking = false;
         this.isTalking = false;
         this.recognition = null;
-        this.speechTimeout = null;
         
         this.robotFace = document.getElementById('robotFace');
         this.mouth = document.getElementById('mouth');
@@ -15,19 +14,15 @@ class RobotApp {
         this.init();
     }
 
-    async init() {
+    init() {
         this.setupEventListeners();
         this.setupAnimations();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
-        
-        // Inicjalizacja rozpoznawania mowy z opóźnieniem
-        setTimeout(() => {
-            this.setupSpeechRecognition();
-        }, 1000);
+        this.setupSpeechRecognition();
         
         console.log('🤖 Robot initialized');
         
-        // Pokaż debug panel w development
+        // Debug tylko na localhost
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             this.debugPanel.style.display = 'block';
         }
@@ -37,8 +32,8 @@ class RobotApp {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         
         if (!SpeechRecognition) {
-            this.updateStatus('Brak wsparcia rozpoznawania mowy');
-            this.debugLog('Speech Recognition not supported');
+            this.updateStatus('Twoja przeglądarka nie obsługuje rozpoznawania mowy');
+            console.log('❌ Speech Recognition not supported');
             return;
         }
 
@@ -49,126 +44,59 @@ class RobotApp {
         this.recognition.maxAlternatives = 1;
 
         this.recognition.onstart = () => {
-            console.log('🎤 Rozpoczęto słuchanie');
-            this.debugLog('Rozpoczęto słuchanie');
+            console.log('🎤 Listening started');
             this.isListening = true;
             this.setListeningState();
             this.updateStatus('Mów teraz...');
-            
-            // Timeout na słuchanie - 8 sekund
-            this.speechTimeout = setTimeout(() => {
-                if (this.isListening) {
-                    console.log('⏰ Timeout słuchania');
-                    this.recognition.stop();
-                }
-            }, 8000);
         };
 
         this.recognition.onresult = (event) => {
-            console.log('📝 Otrzymano wynik');
-            this.clearTimeout();
+            const text = event.results[0][0].transcript;
+            console.log('🗣️ Recognized:', text);
+            this.updateStatus(`Usłyszałem: "${text}"`);
+            this.isListening = false;
             
-            if (event.results && event.results.length > 0) {
-                const result = event.results[0];
-                if (result.length > 0) {
-                    const text = result[0].transcript;
-                    console.log('🗣️ Rozpoznano:', text);
-                    this.debugLog(`Rozpoznano: "${text}"`);
-                    
-                    this.handleSpeechResult(text);
-                    return;
-                }
-            }
-            
-            console.log('❌ Brak rozpoznanego tekstu');
-            this.handleNoSpeech();
+            setTimeout(() => {
+                this.processUserInput(text);
+            }, 500);
         };
 
         this.recognition.onerror = (event) => {
-            console.log('❌ Błąd rozpoznawania:', event.error);
-            this.clearTimeout();
+            console.log('❌ Recognition error:', event.error);
+            this.isListening = false;
+            this.setNormalState();
             
-            switch (event.error) {
-                case 'not-allowed':
-                case 'permission-denied':
-                    this.updateStatus('Brak uprawnień do mikrofonu');
-                    this.debugLog('Brak uprawnień do mikrofonu');
-                    break;
-                case 'no-speech':
-                    this.handleNoSpeech();
-                    break;
-                default:
-                    this.updateStatus('Błąd rozpoznawania mowy');
-                    this.debugLog(`Błąd: ${event.error}`);
+            if (event.error === 'not-allowed') {
+                this.updateStatus('Brak uprawnień do mikrofonu');
+            } else {
+                this.updateStatus('Błąd rozpoznawania mowy');
             }
             
-            this.setNormalStateWithDelay();
+            setTimeout(() => {
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+            }, 2000);
         };
 
         this.recognition.onend = () => {
-            console.log('⏹️ Zakończono słuchanie');
-            this.debugLog('Zakończono słuchanie');
-            this.clearTimeout();
+            console.log('⏹️ Listening ended');
             this.isListening = false;
-            
             if (!this.isThinking && !this.isTalking) {
-                setTimeout(() => {
-                    if (!this.isThinking && !this.isTalking) {
-                        this.setNormalState();
-                        this.updateStatus('Kliknij 🎤 aby rozmawiać');
-                    }
-                }, 1000);
+                this.setNormalState();
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
             }
         };
     }
 
-    handleSpeechResult(text) {
-        this.isListening = false;
-        this.updateStatus(`Usłyszałem: "${text}"`);
-        
-        // Krótkie opóźnienie przed przetwarzaniem
-        setTimeout(async () => {
-            await this.processUserInput(text);
-        }, 500);
-    }
-
-    handleNoSpeech() {
-        this.updateStatus('Nie usłyszałem nic, spróbuj ponownie');
-        this.debugLog('Nie wykryto mowy');
-        this.setNormalStateWithDelay();
-    }
-
     setupEventListeners() {
-        const listenBtn = document.getElementById('listenBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const fullscreenBtn = document.getElementById('fullscreenBtn');
-
-        // Click events
-        listenBtn.addEventListener('click', () => {
+        document.getElementById('listenBtn').addEventListener('click', () => {
             this.toggleListening();
         });
 
-        resetBtn.addEventListener('click', () => {
+        document.getElementById('resetBtn').addEventListener('click', () => {
             this.resetApp();
         });
 
-        fullscreenBtn.addEventListener('click', () => {
-            this.toggleFullscreen();
-        });
-
-        // Touch events dla mobile
-        listenBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.toggleListening();
-        });
-
-        resetBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.resetApp();
-        });
-
-        fullscreenBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
+        document.getElementById('fullscreenBtn').addEventListener('click', () => {
             this.toggleFullscreen();
         });
 
@@ -178,34 +106,24 @@ class RobotApp {
         });
 
         document.addEventListener('touchmove', (e) => {
-            if (e.touches.length > 0) {
-                const touch = e.touches[0];
-                this.moveEyes(touch.clientX, touch.clientY);
-            }
-        }, { passive: true });
-
-        // Zapobiegaj domyślnej akcji przeglądarki
-        document.addEventListener('touchstart', (e) => {
-            if (e.touches.length > 1) {
-                e.preventDefault();
-            }
-        }, { passive: false });
+            const touch = e.touches[0];
+            this.moveEyes(touch.clientX, touch.clientY);
+        });
     }
 
     setupAnimations() {
-        // Mrugnięcie co 3-5 sekund
         setInterval(() => {
             if (!this.isListening && !this.isThinking && !this.isTalking) {
                 this.blink();
             }
-        }, 3000 + Math.random() * 2000);
+        }, 3000);
     }
 
     moveEyes(x, y) {
+        const eyes = document.querySelectorAll('.eye');
         const pupils = document.querySelectorAll('.pupil');
         
-        pupils.forEach((pupil) => {
-            const eye = pupil.parentElement;
+        eyes.forEach((eye, index) => {
             const rect = eye.getBoundingClientRect();
             const eyeCenterX = rect.left + rect.width / 2;
             const eyeCenterY = rect.top + rect.height / 2;
@@ -217,7 +135,7 @@ class RobotApp {
             const moveX = Math.max(-limit, Math.min(limit, deltaX));
             const moveY = Math.max(-limit, Math.min(limit, deltaY));
             
-            pupil.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            pupils[index].style.transform = `translate(${moveX}px, ${moveY}px)`;
         });
     }
 
@@ -233,8 +151,6 @@ class RobotApp {
 
     startListening() {
         if (this.isListening || this.isThinking || this.isTalking) {
-            console.log('⚠️ System zajęty, resetowanie...');
-            this.resetApp();
             return;
         }
         
@@ -244,48 +160,28 @@ class RobotApp {
         }
         
         try {
-            // Anuluj syntezę mowy przed rozpoczęciem nasłuchiwania
             window.speechSynthesis.cancel();
-            
-            console.log('🎤 Uruchamianie rozpoznawania mowy...');
-            this.debugLog('Uruchamianie rozpoznawania mowy');
             this.recognition.start();
-            
         } catch (error) {
-            console.log('❌ Błąd uruchomienia:', error);
-            this.debugLog(`Błąd uruchomienia: ${error.message}`);
+            console.log('❌ Start error:', error);
             this.updateStatus('Błąd mikrofonu');
-            this.setNormalStateWithDelay();
         }
-    }
-
-    stopListening() {
-        if (this.recognition && this.isListening) {
-            try {
-                this.recognition.stop();
-            } catch (error) {
-                console.log('⚠️ Błąd zatrzymywania:', error);
-            }
-        }
-        this.clearTimeout();
-        this.isListening = false;
     }
 
     toggleListening() {
         if (this.isListening) {
-            this.stopListening();
+            this.recognition.stop();
             this.setNormalState();
-            this.updateStatus('Anulowano słuchanie');
+            this.updateStatus('Anulowano');
         } else {
             this.startListening();
         }
     }
 
     resetApp() {
-        console.log('🔄 Reset aplikacji');
-        this.debugLog('Reset aplikacji');
-        
-        this.stopListening();
+        if (this.recognition) {
+            this.recognition.stop();
+        }
         window.speechSynthesis.cancel();
         
         this.isListening = false;
@@ -297,36 +193,22 @@ class RobotApp {
     }
 
     async processUserInput(text) {
-        if (!text || text.trim().length === 0) {
-            console.log('❌ Pusty tekst');
-            this.setNormalState();
-            this.updateStatus('Brak tekstu do przetworzenia');
-            return;
-        }
-        
-        console.log('🧠 Przetwarzanie:', text);
-        this.debugLog(`Przetwarzanie: "${text}"`);
+        console.log('🧠 Processing:', text);
         this.setThinkingState();
         
         try {
             const response = await this.sendToAI(text);
-            console.log('🤖 Odpowiedź AI:', response);
-            this.debugLog(`Odpowiedź: "${response}"`);
+            console.log('🤖 Response:', response);
             await this.speakResponse(response);
-            
         } catch (error) {
-            console.log('❌ Błąd przetwarzania:', error);
-            this.debugLog(`Błąd: ${error.message}`);
+            console.log('❌ Process error:', error);
             this.updateStatus('Błąd przetwarzania');
-            this.speakResponse('Przepraszam, wystąpił błąd. Spróbuj ponownie.');
+            this.speakResponse('Przepraszam, spróbuj ponownie.');
         }
     }
 
     async sendToAI(userText) {
         try {
-            console.log('📤 Wysyłanie do API...');
-            this.debugLog(`Wysyłanie: "${userText}"`);
-            
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
@@ -335,45 +217,26 @@ class RobotApp {
                 body: JSON.stringify({ message: userText })
             });
 
-            console.log('📥 Status:', response.status);
-            this.debugLog(`Status API: ${response.status}`);
-            
             if (!response.ok) {
-                throw new Error(`Błąd HTTP: ${response.status}`);
+                throw new Error(`HTTP error: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('✅ Otrzymano odpowiedź');
-            
             return data.response;
             
         } catch (error) {
-            console.log('❌ Błąd API:', error);
-            this.debugLog(`Błąd API: ${error.message}`);
-            return 'Przepraszam, nie mogę się połączyć z systemem. Spróbuj ponownie.';
+            console.log('❌ API error:', error);
+            return 'Przepraszam, problem z połączeniem. Spróbuj ponownie.';
         }
     }
 
     async speakResponse(text) {
-        if (!text || text.trim().length === 0) {
-            console.log('❌ Pusty tekst do powiedzenia');
-            this.setNormalState();
-            return;
-        }
-        
-        console.log('🗣️ Rozpoczynam mówienie...');
-        this.debugLog(`Mówię: "${text}"`);
-        
-        this.stopListening();
-        window.speechSynthesis.cancel();
-        
         this.setTalkingState();
         
         return new Promise((resolve) => {
-            const cleanText = this.cleanTextForSpeech(text);
+            const cleanText = text.replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ.,!?;:()\-+=\/]/g, ' ').replace(/\s+/g, ' ').trim();
             
             if (!window.speechSynthesis) {
-                console.log('❌ TTS nieobsługiwane');
                 this.setNormalState();
                 resolve();
                 return;
@@ -383,50 +246,21 @@ class RobotApp {
             utterance.lang = 'pl-PL';
             utterance.rate = 0.9;
             utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            
-            utterance.onstart = () => {
-                console.log('🔊 Rozpoczęto mowę');
-                this.debugLog('Synteza mowy rozpoczęta');
-            };
             
             utterance.onend = () => {
-                console.log('🔇 Zakończono mowę');
-                this.debugLog('Synteza mowy zakończona');
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
-            utterance.onerror = (event) => {
-                console.log('❌ Błąd mowy:', event.error);
-                this.debugLog(`Błąd TTS: ${event.error}`);
+            utterance.onerror = () => {
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
-            // Krótkie opóźnienie dla stabilności
-            setTimeout(() => {
-                window.speechSynthesis.speak(utterance);
-            }, 200);
+            window.speechSynthesis.speak(utterance);
         });
-    }
-
-    cleanTextForSpeech(text) {
-        if (!text) return '';
-        // Usuń emotki i specjalne znaki, zostaw polskie znaki
-        return text
-            .replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ.,!?;:()\-+=\/]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-
-    clearTimeout() {
-        if (this.speechTimeout) {
-            clearTimeout(this.speechTimeout);
-            this.speechTimeout = null;
-        }
     }
 
     setNormalState() {
@@ -439,29 +273,20 @@ class RobotApp {
         micBtn.textContent = '🎤';
     }
 
-    setNormalStateWithDelay() {
-        setTimeout(() => {
-            this.setNormalState();
-            this.updateStatus('Kliknij 🎤 aby rozmawiać');
-        }, 2000);
-    }
-
     setListeningState() {
         this.robotFace.className = 'robot-face listening';
         const micBtn = document.getElementById('listenBtn');
-        micBtn.style.animation = 'pulse 1.5s infinite';
+        micBtn.style.animation = 'pulse 1s infinite';
         micBtn.textContent = '🔴';
     }
 
     setThinkingState() {
         this.isThinking = true;
-        this.isListening = false;
         this.robotFace.className = 'robot-face thinking';
         this.updateStatus('Myślę...');
     }
 
     setTalkingState() {
-        this.isThinking = false;
         this.isTalking = true;
         this.robotFace.className = 'robot-face talking';
         this.updateStatus('Mówię...');
@@ -473,29 +298,18 @@ class RobotApp {
 
     debugLog(message) {
         console.log(message);
-        const timestamp = new Date().toLocaleTimeString();
-        this.debugText.innerHTML = `[${timestamp}] ${message}<br>` + this.debugText.innerHTML;
-        
-        // Ogranicz do 6 wiadomości
-        const lines = this.debugText.innerHTML.split('<br>');
-        if (lines.length > 6) {
-            this.debugText.innerHTML = lines.slice(0, 6).join('<br>');
-        }
+        this.debugText.textContent = message;
     }
 
     toggleFullscreen() {
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => {
-                console.log('❌ Błąd pełnego ekranu:', err);
-            });
+            document.documentElement.requestFullscreen();
         } else {
             document.exitFullscreen();
         }
     }
 }
 
-// Inicjalizacja
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicjalizacja aplikacji Robo');
     new RobotApp();
 });
