@@ -3,6 +3,7 @@ class RobotApp {
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
+        this.continuousMode = false; // NOWA FUNKCJA: Tryb ciągłego nasłuchiwania
         this.recognition = null;
         
         this.robotFace = document.getElementById('robotFace');
@@ -80,9 +81,34 @@ class RobotApp {
         this.recognition.onend = () => {
             console.log('⏹️ Listening ended');
             this.isListening = false;
-            if (!this.isThinking && !this.isTalking) {
-                this.setNormalState();
-                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+            
+            // Sprawdź, czy tryb ciągły jest aktywny
+            if (this.continuousMode) {
+                console.log('🔄 Tryb ciągły aktywny - timeout ciszy wykryty');
+                
+                // Jeśli robot nie myśli ani nie mówi, automatycznie wznów nasłuchiwanie
+                if (!this.isThinking && !this.isTalking) {
+                    console.log('🔄 Automatyczne wznowienie nasłuchiwania po ciszy (1.5s)...');
+                    this.updateStatus('Tryb ciągły: czekam na Twoją wypowiedź...');
+                    
+                    // Wznów nasłuchiwanie po krótkim opóźnieniu
+                    setTimeout(() => {
+                        // Sprawdź ponownie, czy tryb ciągły jest nadal aktywny
+                        if (this.continuousMode && !this.isListening && !this.isThinking && !this.isTalking) {
+                            console.log('🔄 Wznawianie nasłuchiwania...');
+                            this.startListening();
+                        }
+                    }, 1500);
+                } else {
+                    // Robot myśli lub mówi - nasłuchiwanie zostanie wznowione przez handleAfterSpeaking()
+                    console.log('🔄 Robot zajęty (myśli/mówi) - nasłuchiwanie zostanie wznowione później');
+                }
+            } else {
+                // Normalny tryb - bez automatycznego wznowienia
+                if (!this.isThinking && !this.isTalking) {
+                    this.setNormalState();
+                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
+                }
             }
         };
     }
@@ -169,16 +195,42 @@ class RobotApp {
     }
 
     toggleListening() {
+        // Jeśli tryb ciągły jest aktywny, wyłącz go
+        if (this.continuousMode) {
+            console.log('🔄 Wyłączanie trybu ciągłego');
+            this.continuousMode = false;
+            if (this.isListening) {
+                this.recognition.stop();
+            }
+            this.setNormalState();
+            this.updateStatus('Tryb ciągły wyłączony - kliknij 🎤 aby włączyć');
+            return;
+        }
+        
+        // Jeśli normalnie słucha, anuluj
         if (this.isListening) {
             this.recognition.stop();
             this.setNormalState();
             this.updateStatus('Anulowano');
-        } else {
-            this.startListening();
+            return;
         }
+        
+        // Włącz tryb ciągły i zacznij słuchać
+        console.log('🔄 Włączanie trybu ciągłego');
+        this.continuousMode = true;
+        this.updateStatus('Tryb ciągły WŁĄCZONY - kliknij ponownie aby wyłączyć');
+        
+        // Czekaj chwilę przed rozpoczęciem nasłuchiwania
+        setTimeout(() => {
+            if (this.continuousMode) {
+                this.startListening();
+            }
+        }, 1000);
     }
 
     resetApp() {
+        console.log('🔄 Reset aplikacji');
+        
         if (this.recognition) {
             this.recognition.stop();
         }
@@ -187,6 +239,7 @@ class RobotApp {
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
+        this.continuousMode = false; // Wyłącz tryb ciągły przy resecie
         
         this.setNormalState();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
@@ -238,6 +291,7 @@ class RobotApp {
             
             if (!window.speechSynthesis) {
                 this.setNormalState();
+                this.handleAfterSpeaking();
                 resolve();
                 return;
             }
@@ -248,19 +302,38 @@ class RobotApp {
             utterance.pitch = 1.0;
             
             utterance.onend = () => {
+                console.log('🔊 Skończyłem mówić');
                 this.setNormalState();
-                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+                this.handleAfterSpeaking();
                 resolve();
             };
             
             utterance.onerror = () => {
+                console.log('❌ Błąd mowy');
                 this.setNormalState();
-                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+                this.handleAfterSpeaking();
                 resolve();
             };
             
             window.speechSynthesis.speak(utterance);
         });
+    }
+    
+    handleAfterSpeaking() {
+        // KLUCZOWA FUNKCJA: Jeśli tryb ciągły jest włączony, automatycznie zacznij słuchać ponownie
+        if (this.continuousMode) {
+            console.log('🔄 Tryb ciągły: Automatyczne wznowienie nasłuchiwania...');
+            this.updateStatus('Słucham... (tryb ciągły aktywny)');
+            
+            // Małe opóźnienie przed ponownym rozpoczęciem nasłuchiwania
+            setTimeout(() => {
+                if (this.continuousMode && !this.isListening && !this.isThinking && !this.isTalking) {
+                    this.startListening();
+                }
+            }, 1000);
+        } else {
+            this.updateStatus('Kliknij 🎤 aby rozmawiać');
+        }
     }
 
     setNormalState() {
@@ -269,8 +342,17 @@ class RobotApp {
         this.isTalking = false;
         this.robotFace.className = 'robot-face';
         const micBtn = document.getElementById('listenBtn');
-        micBtn.style.animation = '';
-        micBtn.textContent = '🎤';
+        
+        // Wizualna informacja o trybie ciągłym
+        if (this.continuousMode) {
+            micBtn.style.animation = 'pulse-slow 2s infinite';
+            micBtn.textContent = '🔴';
+            micBtn.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+        } else {
+            micBtn.style.animation = '';
+            micBtn.textContent = '🎤';
+            micBtn.style.backgroundColor = '';
+        }
     }
 
     setListeningState() {
