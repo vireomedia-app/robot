@@ -80,14 +80,13 @@ function callGeminiAPI(apiKey, message) {
             }
         });
 
-        // Poprawne nazwy modeli Gemini API (według dokumentacji Google):
-        // - "gemini-1.5-flash-latest" (alias do najnowszej stabilnej wersji)
-        // - "gemini-1.5-flash-002" (konkretna wersja z września 2024)
-        // - "gemini-2.0-flash" (nowsza generacja, zalecana)
+        // NAPRAWIONE: Gemini 1.5 modele wycofane 29.04.2025
+        // Aktualne modele: gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash (backup)
+        // API używa wersji v1beta
         const options = {
             hostname: 'generativelanguage.googleapis.com',
             port: 443,
-            path: `/v1/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
+            path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
