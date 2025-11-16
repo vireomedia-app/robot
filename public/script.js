@@ -12,6 +12,8 @@ class RobotApp {
         this.status = document.getElementById('status');
         this.debugPanel = document.getElementById('debugPanel');
         this.debugText = document.getElementById('debugText');
+        this.startScreen = document.getElementById('startScreen');
+        this.startBtn = document.getElementById('startBtn');
         
         this.init();
     }
@@ -19,7 +21,6 @@ class RobotApp {
     init() {
         this.setupEventListeners();
         this.setupAnimations();
-        this.updateStatus('Kliknij 🎤 aby rozmawiać');
         this.setupSpeechRecognition();
         
         console.log('🤖 Robot initialized');
@@ -29,6 +30,55 @@ class RobotApp {
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             this.debugPanel.style.display = 'block';
         }
+        
+        // Sprawdź localStorage i pokaż/ukryj ekran startowy
+        this.checkFirstTime();
+    }
+
+    checkFirstTime() {
+        const hasStarted = localStorage.getItem('robotAppStarted');
+        
+        if (hasStarted === 'true') {
+            // Użytkownik już wcześniej kliknął START - ukryj ekran startowy i automatycznie uruchom mikrofon
+            console.log('✅ User has already started - auto-starting microphone');
+            this.startScreen.classList.add('hidden');
+            this.updateStatus('Automatycznie uruchamiam mikrofon...');
+            
+            // Poczekaj chwilę na pełne załadowanie przed automatycznym uruchomieniem
+            setTimeout(() => {
+                this.autoStartMicrophone();
+            }, 1000);
+        } else {
+            // Pierwsze uruchomienie - pokaż ekran startowy
+            console.log('👋 First time user - showing START screen');
+            this.updateStatus('Kliknij START aby rozpocząć');
+        }
+    }
+
+    autoStartMicrophone() {
+        // Automatycznie uruchom mikrofon bez przycisku START
+        this.updateStatus('Kliknij 🎤 aby rozmawiać');
+        
+        // Opcjonalnie: możesz od razu uruchomić słuchanie
+        // this.startListening();
+    }
+
+    handleStartClick() {
+        console.log('🚀 START button clicked - saving to localStorage');
+        
+        // Zapisz w localStorage że użytkownik już kliknął START
+        localStorage.setItem('robotAppStarted', 'true');
+        
+        // Ukryj ekran startowy z animacją
+        this.startScreen.classList.add('hidden');
+        
+        // Poczekaj na zakończenie animacji przed uruchomieniem mikrofonu
+        setTimeout(() => {
+            this.updateStatus('Kliknij 🎤 aby rozmawiać');
+            
+            // Opcjonalnie: możesz od razu uruchomić słuchanie po kliknięciu START
+            // this.startListening();
+        }, 500);
     }
 
     detectPlatform() {
@@ -102,6 +152,11 @@ class RobotApp {
     }
 
     setupEventListeners() {
+        // Przycisk START
+        this.startBtn.addEventListener('click', () => {
+            this.handleStartClick();
+        });
+
         document.getElementById('listenBtn').addEventListener('click', () => {
             this.toggleListening();
         });
