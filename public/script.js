@@ -4,6 +4,7 @@ class RobotApp {
         this.isThinking = false;
         this.isTalking = false;
         this.recognition = null;
+        this.speechTimeout = null;
         
         this.robotFace = document.getElementById('robotFace');
         this.mouth = document.getElementById('mouth');
@@ -14,15 +15,20 @@ class RobotApp {
         this.init();
     }
 
-    init() {
-        this.setupSpeechRecognition();
+    async init() {
         this.setupEventListeners();
         this.setupAnimations();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
         
+        // Inicjalizacja rozpoznawania mowy z opóźnieniem
+        setTimeout(() => {
+            this.setupSpeechRecognition();
+        }, 1000);
+        
         console.log('🤖 Robot initialized');
         
-        if (window.location.hostname === 'localhost' || window.location.protocol === 'http:') {
+        // Pokaż debug panel w development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             this.debugPanel.style.display = 'block';
         }
     }
@@ -31,8 +37,7 @@ class RobotApp {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         
         if (!SpeechRecognition) {
-            this.updateStatus('Przeglądarka nie obsługuje rozpoznawania mowy');
-            console.error('❌ Speech Recognition not supported');
+            this.updateStatus('Brak wsparcia rozpoznawania mowy');
             this.debugLog('Speech Recognition not supported');
             return;
         }
@@ -49,71 +54,88 @@ class RobotApp {
             this.isListening = true;
             this.setListeningState();
             this.updateStatus('Mów teraz...');
+            
+            // Timeout na słuchanie - 8 sekund
+            this.speechTimeout = setTimeout(() => {
+                if (this.isListening) {
+                    console.log('⏰ Timeout słuchania');
+                    this.recognition.stop();
+                }
+            }, 8000);
         };
 
-        this.recognition.onresult = async (event) => {
-            console.log('📝 Wynik rozpoznawania otrzymany');
-            if (event.results && event.results.length > 0 && event.results[0].length > 0) {
-                const text = event.results[0][0].transcript;
-                console.log('🗣️ Rozpoznano:', text);
-                this.debugLog(`Rozpoznano: "${text}"`);
-                
-                this.isListening = false;
-                this.updateStatus(`Usłyszałem: "${text}"`);
-                
-                await this.processUserInput(text);
-            } else {
-                console.log('❌ Brak rozpoznanego tekstu');
-                this.debugLog('Brak rozpoznanego tekstu');
-                this.setNormalState();
-                this.updateStatus('Nic nie usłyszałem, spróbuj ponownie');
+        this.recognition.onresult = (event) => {
+            console.log('📝 Otrzymano wynik');
+            this.clearTimeout();
+            
+            if (event.results && event.results.length > 0) {
+                const result = event.results[0];
+                if (result.length > 0) {
+                    const text = result[0].transcript;
+                    console.log('🗣️ Rozpoznano:', text);
+                    this.debugLog(`Rozpoznano: "${text}"`);
+                    
+                    this.handleSpeechResult(text);
+                    return;
+                }
             }
+            
+            console.log('❌ Brak rozpoznanego tekstu');
+            this.handleNoSpeech();
         };
 
         this.recognition.onerror = (event) => {
             console.log('❌ Błąd rozpoznawania:', event.error);
+            this.clearTimeout();
             
-            let errorMessage = 'Błąd rozpoznawania mowy';
             switch (event.error) {
                 case 'not-allowed':
-                    errorMessage = 'Brak uprawnień do mikrofonu';
-                    break;
-                case 'audio-capture':
-                    errorMessage = 'Nie znaleziono mikrofonu';
-                    break;
-                case 'network':
-                    errorMessage = 'Błąd sieci';
+                case 'permission-denied':
+                    this.updateStatus('Brak uprawnień do mikrofonu');
+                    this.debugLog('Brak uprawnień do mikrofonu');
                     break;
                 case 'no-speech':
-                    errorMessage = 'Nie wykryto mowy';
+                    this.handleNoSpeech();
                     break;
                 default:
-                    errorMessage = `Błąd: ${event.error}`;
+                    this.updateStatus('Błąd rozpoznawania mowy');
+                    this.debugLog(`Błąd: ${event.error}`);
             }
             
-            this.updateStatus(errorMessage);
-            this.debugLog(`Błąd rozpoznawania: ${event.error}`);
-            this.setNormalState();
-            
-            // Automatyczny reset po błędzie
-            setTimeout(() => {
-                if (!this.isThinking && !this.isTalking) {
-                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
-                }
-            }, 2000);
+            this.setNormalStateWithDelay();
         };
 
         this.recognition.onend = () => {
             console.log('⏹️ Zakończono słuchanie');
             this.debugLog('Zakończono słuchanie');
+            this.clearTimeout();
             this.isListening = false;
             
-            // Jeśli nie przetwarzamy i nie mówimy, wróć do stanu normalnego
             if (!this.isThinking && !this.isTalking) {
-                this.setNormalState();
-                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+                setTimeout(() => {
+                    if (!this.isThinking && !this.isTalking) {
+                        this.setNormalState();
+                        this.updateStatus('Kliknij 🎤 aby rozmawiać');
+                    }
+                }, 1000);
             }
         };
+    }
+
+    handleSpeechResult(text) {
+        this.isListening = false;
+        this.updateStatus(`Usłyszałem: "${text}"`);
+        
+        // Krótkie opóźnienie przed przetwarzaniem
+        setTimeout(async () => {
+            await this.processUserInput(text);
+        }, 500);
+    }
+
+    handleNoSpeech() {
+        this.updateStatus('Nie usłyszałem nic, spróbuj ponownie');
+        this.debugLog('Nie wykryto mowy');
+        this.setNormalStateWithDelay();
     }
 
     setupEventListeners() {
@@ -127,7 +149,7 @@ class RobotApp {
         });
 
         resetBtn.addEventListener('click', () => {
-            this.resetListening();
+            this.resetApp();
         });
 
         fullscreenBtn.addEventListener('click', () => {
@@ -135,20 +157,20 @@ class RobotApp {
         });
 
         // Touch events dla mobile
-        listenBtn.addEventListener('touchstart', (e) => {
+        listenBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             this.toggleListening();
-        }, { passive: false });
+        });
 
-        resetBtn.addEventListener('touchstart', (e) => {
+        resetBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
-            this.resetListening();
-        }, { passive: false });
+            this.resetApp();
+        });
 
-        fullscreenBtn.addEventListener('touchstart', (e) => {
+        fullscreenBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             this.toggleFullscreen();
-        }, { passive: false });
+        });
 
         // Ruch oczu
         document.addEventListener('mousemove', (e) => {
@@ -159,20 +181,13 @@ class RobotApp {
             if (e.touches.length > 0) {
                 const touch = e.touches[0];
                 this.moveEyes(touch.clientX, touch.clientY);
-                e.preventDefault();
             }
-        }, { passive: false });
+        }, { passive: true });
 
         // Zapobiegaj domyślnej akcji przeglądarki
         document.addEventListener('touchstart', (e) => {
             if (e.touches.length > 1) {
                 e.preventDefault();
-            }
-        }, { passive: false });
-
-        document.addEventListener('touchend', (e) => {
-            if (e.touches.length === 0) {
-                // Zapobiegaj domyślnej akcji
             }
         }, { passive: false });
     }
@@ -187,10 +202,10 @@ class RobotApp {
     }
 
     moveEyes(x, y) {
-        const eyes = document.querySelectorAll('.eye');
         const pupils = document.querySelectorAll('.pupil');
         
-        eyes.forEach((eye, index) => {
+        pupils.forEach((pupil) => {
+            const eye = pupil.parentElement;
             const rect = eye.getBoundingClientRect();
             const eyeCenterX = rect.left + rect.width / 2;
             const eyeCenterY = rect.top + rect.height / 2;
@@ -202,7 +217,7 @@ class RobotApp {
             const moveX = Math.max(-limit, Math.min(limit, deltaX));
             const moveY = Math.max(-limit, Math.min(limit, deltaY));
             
-            pupils[index].style.transform = `translate(${moveX}px, ${moveY}px)`;
+            pupil.style.transform = `translate(${moveX}px, ${moveY}px)`;
         });
     }
 
@@ -216,11 +231,11 @@ class RobotApp {
         });
     }
 
-    async startListening() {
+    startListening() {
         if (this.isListening || this.isThinking || this.isTalking) {
-            console.log('⏹️ System zajęty, zatrzymuję obecną sesję');
-            this.recognition.stop();
-            await this.delay(500);
+            console.log('⚠️ System zajęty, resetowanie...');
+            this.resetApp();
+            return;
         }
         
         if (!this.recognition) {
@@ -232,61 +247,47 @@ class RobotApp {
             // Anuluj syntezę mowy przed rozpoczęciem nasłuchiwania
             window.speechSynthesis.cancel();
             
-            console.log('🎤 Próba uruchomienia słuchania');
-            this.debugLog('Uruchamianie rozpoznawania mowy...');
+            console.log('🎤 Uruchamianie rozpoznawania mowy...');
+            this.debugLog('Uruchamianie rozpoznawania mowy');
             this.recognition.start();
             
         } catch (error) {
-            console.log('❌ Błąd uruchomienia rozpoznawania:', error);
+            console.log('❌ Błąd uruchomienia:', error);
             this.debugLog(`Błąd uruchomienia: ${error.message}`);
             this.updateStatus('Błąd mikrofonu');
-            this.setNormalState();
-            
-            // Spróbuj ponownie po krótkim opóźnieniu
-            setTimeout(() => {
-                if (!this.isListening) {
-                    this.updateStatus('Kliknij 🎤 aby spróbować ponownie');
-                }
-            }, 1000);
+            this.setNormalStateWithDelay();
         }
+    }
+
+    stopListening() {
+        if (this.recognition && this.isListening) {
+            try {
+                this.recognition.stop();
+            } catch (error) {
+                console.log('⚠️ Błąd zatrzymywania:', error);
+            }
+        }
+        this.clearTimeout();
+        this.isListening = false;
     }
 
     toggleListening() {
         if (this.isListening) {
-            console.log('⏹️ Ręczne zatrzymanie słuchania');
-            this.recognition.stop();
+            this.stopListening();
             this.setNormalState();
             this.updateStatus('Anulowano słuchanie');
-            
-            // Powrót do stanu początkowego po krótkim czasie
-            setTimeout(() => {
-                if (!this.isThinking && !this.isTalking) {
-                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
-                }
-            }, 1500);
-            
         } else {
             this.startListening();
         }
     }
 
-    resetListening() {
-        console.log('🔄 Reset systemu');
-        this.debugLog('Reset systemu');
+    resetApp() {
+        console.log('🔄 Reset aplikacji');
+        this.debugLog('Reset aplikacji');
         
-        // Zatrzymaj rozpoznawanie mowy
-        if (this.recognition) {
-            try {
-                this.recognition.stop();
-            } catch (error) {
-                console.log('⚠️ Błąd przy zatrzymywaniu rozpoznawania:', error);
-            }
-        }
-        
-        // Zatrzymaj syntezę mowy
+        this.stopListening();
         window.speechSynthesis.cancel();
         
-        // Zresetuj stany
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
@@ -297,9 +298,9 @@ class RobotApp {
 
     async processUserInput(text) {
         if (!text || text.trim().length === 0) {
-            console.log('❌ Pusty tekst do przetworzenia');
+            console.log('❌ Pusty tekst');
             this.setNormalState();
-            this.updateStatus('Nie usłyszałem co powiedziałeś');
+            this.updateStatus('Brak tekstu do przetworzenia');
             return;
         }
         
@@ -310,12 +311,12 @@ class RobotApp {
         try {
             const response = await this.sendToAI(text);
             console.log('🤖 Odpowiedź AI:', response);
-            this.debugLog(`Odpowiedź AI: "${response}"`);
+            this.debugLog(`Odpowiedź: "${response}"`);
             await this.speakResponse(response);
             
         } catch (error) {
             console.log('❌ Błąd przetwarzania:', error);
-            this.debugLog(`Błąd przetwarzania: ${error.message}`);
+            this.debugLog(`Błąd: ${error.message}`);
             this.updateStatus('Błąd przetwarzania');
             this.speakResponse('Przepraszam, wystąpił błąd. Spróbuj ponownie.');
         }
@@ -323,24 +324,18 @@ class RobotApp {
 
     async sendToAI(userText) {
         try {
-            console.log('📤 Wysyłanie do API:', userText);
-            this.debugLog(`Wysyłanie do API: "${userText}"`);
-            
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 sekund timeout
+            console.log('📤 Wysyłanie do API...');
+            this.debugLog(`Wysyłanie: "${userText}"`);
             
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ message: userText }),
-                signal: controller.signal
+                body: JSON.stringify({ message: userText })
             });
 
-            clearTimeout(timeoutId);
-            
-            console.log('📥 Status odpowiedzi:', response.status);
+            console.log('📥 Status:', response.status);
             this.debugLog(`Status API: ${response.status}`);
             
             if (!response.ok) {
@@ -348,19 +343,14 @@ class RobotApp {
             }
 
             const data = await response.json();
-            console.log('✅ Otrzymano odpowiedź API');
+            console.log('✅ Otrzymano odpowiedź');
             
             return data.response;
             
         } catch (error) {
-            console.log('❌ Błąd komunikacji z API:', error);
+            console.log('❌ Błąd API:', error);
             this.debugLog(`Błąd API: ${error.message}`);
-            
-            if (error.name === 'AbortError') {
-                return 'Przepraszam, odpowiedź zajęła zbyt dużo czasu. Spróbuj ponownie.';
-            }
-            
-            return 'Przepraszam, nie mogę się teraz połączyć z systemem. Spróbuj ponownie za chwilę.';
+            return 'Przepraszam, nie mogę się połączyć z systemem. Spróbuj ponownie.';
         }
     }
 
@@ -368,33 +358,23 @@ class RobotApp {
         if (!text || text.trim().length === 0) {
             console.log('❌ Pusty tekst do powiedzenia');
             this.setNormalState();
-            this.updateStatus('Brak odpowiedzi do powiedzenia');
             return;
         }
         
-        console.log('🗣️ Rozpoczynam mówienie:', text);
-        this.debugLog(`Rozpoczynam mówienie: "${text}"`);
+        console.log('🗣️ Rozpoczynam mówienie...');
+        this.debugLog(`Mówię: "${text}"`);
         
-        // Zatrzymaj rozpoznawanie mowy przed mówieniem
-        if (this.isListening) {
-            this.recognition.stop();
-        }
-        
-        // Zatrzymaj wszelką istniejącą syntezę mowy
+        this.stopListening();
         window.speechSynthesis.cancel();
         
         this.setTalkingState();
         
         return new Promise((resolve) => {
-            const cleanText = this.removeEmojis(text);
-            console.log('🧹 Tekst po czyszczeniu:', cleanText);
+            const cleanText = this.cleanTextForSpeech(text);
             
-            // Sprawdź czy TTS jest dostępny
             if (!window.speechSynthesis) {
-                console.log('❌ TTS nie jest obsługiwane');
-                this.debugLog('TTS nieobsługiwane');
+                console.log('❌ TTS nieobsługiwane');
                 this.setNormalState();
-                this.updateStatus('Synteza mowy niedostępna');
                 resolve();
                 return;
             }
@@ -406,12 +386,12 @@ class RobotApp {
             utterance.volume = 1.0;
             
             utterance.onstart = () => {
-                console.log('🔊 Rozpoczęto syntezę mowy');
+                console.log('🔊 Rozpoczęto mowę');
                 this.debugLog('Synteza mowy rozpoczęta');
             };
             
             utterance.onend = () => {
-                console.log('🔇 Zakończono syntezę mowy');
+                console.log('🔇 Zakończono mowę');
                 this.debugLog('Synteza mowy zakończona');
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
@@ -419,31 +399,34 @@ class RobotApp {
             };
             
             utterance.onerror = (event) => {
-                console.log('❌ Błąd syntezy mowy:', event.error);
+                console.log('❌ Błąd mowy:', event.error);
                 this.debugLog(`Błąd TTS: ${event.error}`);
                 this.setNormalState();
-                this.updateStatus('Błąd syntezy mowy');
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
-            // Opóźnienie dla stabilności
+            // Krótkie opóźnienie dla stabilności
             setTimeout(() => {
                 window.speechSynthesis.speak(utterance);
-            }, 100);
+            }, 200);
         });
     }
 
-    removeEmojis(text) {
+    cleanTextForSpeech(text) {
         if (!text) return '';
-        
+        // Usuń emotki i specjalne znaki, zostaw polskie znaki
         return text
             .replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ.,!?;:()\-+=\/]/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
     }
 
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    clearTimeout() {
+        if (this.speechTimeout) {
+            clearTimeout(this.speechTimeout);
+            this.speechTimeout = null;
+        }
     }
 
     setNormalState() {
@@ -456,8 +439,14 @@ class RobotApp {
         micBtn.textContent = '🎤';
     }
 
+    setNormalStateWithDelay() {
+        setTimeout(() => {
+            this.setNormalState();
+            this.updateStatus('Kliknij 🎤 aby rozmawiać');
+        }, 2000);
+    }
+
     setListeningState() {
-        this.isListening = true;
         this.robotFace.className = 'robot-face listening';
         const micBtn = document.getElementById('listenBtn');
         micBtn.style.animation = 'pulse 1.5s infinite';
@@ -474,7 +463,6 @@ class RobotApp {
     setTalkingState() {
         this.isThinking = false;
         this.isTalking = true;
-        this.isListening = false;
         this.robotFace.className = 'robot-face talking';
         this.updateStatus('Mówię...');
     }
@@ -488,10 +476,10 @@ class RobotApp {
         const timestamp = new Date().toLocaleTimeString();
         this.debugText.innerHTML = `[${timestamp}] ${message}<br>` + this.debugText.innerHTML;
         
-        // Ogranicz do 8 wiadomości
+        // Ogranicz do 6 wiadomości
         const lines = this.debugText.innerHTML.split('<br>');
-        if (lines.length > 8) {
-            this.debugText.innerHTML = lines.slice(0, 8).join('<br>');
+        if (lines.length > 6) {
+            this.debugText.innerHTML = lines.slice(0, 6).join('<br>');
         }
     }
 
@@ -499,7 +487,6 @@ class RobotApp {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch(err => {
                 console.log('❌ Błąd pełnego ekranu:', err);
-                this.debugLog(`Błąd fullscreen: ${err.message}`);
             });
         } else {
             document.exitFullscreen();
@@ -507,17 +494,8 @@ class RobotApp {
     }
 }
 
-// Inicjalizacja aplikacji
+// Inicjalizacja
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicjalizacja aplikacji Robo');
-    window.robotApp = new RobotApp();
-});
-
-// Globalna obsługa błędów
-window.addEventListener('error', (event) => {
-    console.error('🚨 Globalny błąd:', event.error);
-});
-
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('🚨 Nieobsłużony promise:', event.reason);
+    new RobotApp();
 });
