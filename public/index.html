@@ -13,16 +13,6 @@
 </head>
 <body>
     <div class="app">
-        <!-- Ekran startowy z przyciskiem START -->
-        <div class="start-screen" id="startScreen">
-            <div class="start-content">
-                <h1 class="start-title">🤖 Robot Asystent</h1>
-                <p class="start-subtitle">Witaj! Jestem twoim głosowym asystentem</p>
-                <button id="startBtn" class="start-btn">START</button>
-                <p class="start-info">Kliknij START aby aktywować mikrofon</p>
-            </div>
-        </div>
-
         <!-- Twarz robota -->
         <div class="robot-face" id="robotFace">
             <div class="eyes">
@@ -41,7 +31,9 @@
         
         <!-- Kontrolki -->
         <div class="controls">
-            <button id="listenBtn" class="control-btn" aria-label="Rozpocznij słuchanie">🎤</button>
+            <button id="startContinuousBtn" class="control-btn large-btn" aria-label="Rozpocznij tryb ciągły">▶️ Start</button>
+            <button id="stopContinuousBtn" class="control-btn large-btn" style="display:none;" aria-label="Zatrzymaj tryb ciągły">⏹️ Stop</button>
+            <button id="listenBtn" class="control-btn" aria-label="Pojedyncze słuchanie">🎤</button>
             <button id="resetBtn" class="control-btn" aria-label="Resetuj">🔄</button>
             <button id="fullscreenBtn" class="control-btn" aria-label="Pełny ekran">⛶</button>
         </div>

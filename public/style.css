@@ -13,93 +13,6 @@ body {
     touch-action: manipulation;
 }
 
-/* Ekran startowy */
-.start-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 2000;
-    opacity: 1;
-    transition: opacity 0.5s ease, visibility 0.5s ease;
-}
-
-.start-screen.hidden {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-}
-
-.start-content {
-    text-align: center;
-    padding: 20px;
-    animation: fadeInUp 0.8s ease;
-}
-
-.start-title {
-    font-size: clamp(32px, 8vw, 48px);
-    color: white;
-    margin-bottom: 15px;
-    text-shadow: 3px 3px 6px rgba(0,0,0,0.3);
-    animation: pulse 2s infinite;
-}
-
-.start-subtitle {
-    font-size: clamp(16px, 4vw, 20px);
-    color: rgba(255,255,255,0.9);
-    margin-bottom: 40px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-}
-
-.start-btn {
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-    border: none;
-    border-radius: 50px;
-    color: white;
-    font-size: clamp(24px, 6vw, 32px);
-    font-weight: bold;
-    padding: 20px 60px;
-    cursor: pointer;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 20px;
-}
-
-.start-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
-    background: linear-gradient(135deg, #ff7b7b 0%, #fe6a7f 100%);
-}
-
-.start-btn:active {
-    transform: translateY(-1px);
-    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-}
-
-.start-info {
-    font-size: clamp(12px, 3vw, 14px);
-    color: rgba(255,255,255,0.7);
-    margin-top: 10px;
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 .app {
     width: 100vw;
     height: 100vh;
@@ -224,8 +137,11 @@ body {
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
     z-index: 1000;
+    max-width: 90vw;
+    justify-content: center;
 }
 
 .control-btn {
@@ -243,13 +159,42 @@ body {
     align-items: center;
 }
 
+.control-btn.large-btn {
+    width: auto;
+    padding: 12px 20px;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: bold;
+    min-width: 100px;
+}
+
 .control-btn:hover {
     background: rgba(255,255,255,0.4);
-    transform: scale(1.1);
+    transform: scale(1.05);
 }
 
 .control-btn:active {
     transform: scale(0.95);
+}
+
+#startContinuousBtn {
+    background: rgba(76, 175, 80, 0.4);
+}
+
+#startContinuousBtn:hover {
+    background: rgba(76, 175, 80, 0.6);
+}
+
+#stopContinuousBtn {
+    background: rgba(244, 67, 54, 0.4);
+}
+
+#stopContinuousBtn:hover {
+    background: rgba(244, 67, 54, 0.6);
+}
+
+.continuous-active #stopContinuousBtn {
+    animation: pulse 2s infinite;
 }
 
 /* Debug panel - POPRAWIONY */
