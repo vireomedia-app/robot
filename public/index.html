@@ -2,11 +2,14 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Robot Asystent</title>
     <meta name="theme-color" content="#4F46E5">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Robot Asystent">
 </head>
 <body>
     <div class="app">
@@ -28,9 +31,9 @@
         
         <!-- Kontrolki -->
         <div class="controls">
-            <button id="listenBtn" class="control-btn">🎤</button>
-            <button id="resetBtn" class="control-btn">🔄</button>
-            <button id="fullscreenBtn" class="control-btn">⛶</button>
+            <button id="listenBtn" class="control-btn" aria-label="Rozpocznij słuchanie">🎤</button>
+            <button id="resetBtn" class="control-btn" aria-label="Resetuj">🔄</button>
+            <button id="fullscreenBtn" class="control-btn" aria-label="Pełny ekran">⛶</button>
         </div>
 
         <!-- Debug panel -->

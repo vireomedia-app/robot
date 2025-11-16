@@ -17,18 +17,17 @@ class RobotApp {
         this.setupSpeechRecognition();
         this.setupEventListeners();
         this.setupAnimations();
-        this.setupAutoRestart();
-        this.updateStatus('Gotowy do rozmowy');
+        this.updateStatus('Kliknij 🎤 aby rozmawiać');
         
-        // Automatyczne rozpoczęcie słuchania po załadowaniu
-        setTimeout(() => {
-            this.startListening();
-        }, 2000);
+        // NIE uruchamiaj automatycznie słuchania - czekaj na kliknięcie
+        this.debugLog('Aplikacja gotowa - czekam na kliknięcie mikrofonu');
         
-        // Pokaz debug panel w development
         if (window.location.hostname === 'localhost') {
             this.debugPanel.style.display = 'block';
         }
+        
+        // Dodaj obsługę orientacji ekranu
+        this.setupOrientationHandler();
     }
 
     setupSpeechRecognition() {
@@ -69,7 +68,8 @@ class RobotApp {
                 this.debugLog('Automatyczne restartowanie rozpoznawania...');
                 setTimeout(() => {
                     if (!this.isThinking && !this.isTalking) {
-                        this.startListening();
+                        this.setNormalState();
+                        this.updateStatus('Kliknij 🎤 aby rozmawiać');
                     }
                 }, 1000);
             }
@@ -86,7 +86,7 @@ class RobotApp {
             if (!this.isThinking && !this.isTalking) {
                 setTimeout(() => {
                     this.setNormalState();
-                    this.updateStatus('Gotowy do rozmowy');
+                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 }, 500);
             }
         };
@@ -115,10 +115,21 @@ class RobotApp {
             const touch = e.touches[0];
             this.moveEyes(touch.clientX, touch.clientY);
         });
+
+        // Zapobieganie zoomowaniu na telefonach
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('gesturestart', (e) => {
+            e.preventDefault();
+        });
     }
 
     setupAnimations() {
-        // Losowe mruganie
+        // Losowe mruganie tylko gdy nieaktywny
         setInterval(() => {
             if (!this.isListening && !this.isThinking && !this.isTalking) {
                 this.blink();
@@ -126,14 +137,11 @@ class RobotApp {
         }, 3000);
     }
 
-    setupAutoRestart() {
-        // Automatyczne restartowanie co 30 sekund jeśli nieaktywne
-        setInterval(() => {
-            if (!this.isListening && !this.isThinking && !this.isTalking) {
-                this.debugLog('Auto-restarting speech recognition');
-                this.startListening();
-            }
-        }, 30000);
+    setupOrientationHandler() {
+        // Obsługa zmiany orientacji ekranu
+        window.addEventListener('resize', () => {
+            this.debugLog(`Ekran: ${window.innerWidth}x${window.innerHeight}`);
+        });
     }
 
     moveEyes(x, y) {
@@ -149,7 +157,7 @@ class RobotApp {
             const deltaY = (y - eyeCenterY) / 50;
             
             // Ogranicz ruch źrenic
-            const limit = 10;
+            const limit = 8;
             const moveX = Math.max(-limit, Math.min(limit, deltaX));
             const moveY = Math.max(-limit, Math.min(limit, deltaY));
             
@@ -169,16 +177,31 @@ class RobotApp {
 
     startListening() {
         if (this.isListening || this.isThinking || this.isTalking) {
+            this.debugLog('Cannot start listening - busy');
+            return;
+        }
+        
+        // Sprawdź czy przeglądarka wspiera rozpoznawanie mowy
+        if (!this.recognition) {
+            this.updateStatus('Rozpoznawanie mowy niedostępne');
+            this.debugLog('SpeechRecognition not available');
             return;
         }
         
         try {
             this.recognition.start();
-            this.debugLog('Manual start listening');
+            this.debugLog('Manual start listening - user initiated');
         } catch (error) {
             this.debugLog(`Błąd startu rozpoznawania: ${error}`);
+            this.updateStatus('Błąd mikrofonu');
+            
             // Spróbuj ponownie po chwili
-            setTimeout(() => this.startListening(), 1000);
+            setTimeout(() => {
+                if (!this.isThinking && !this.isTalking) {
+                    this.setNormalState();
+                    this.updateStatus('Kliknij 🎤 aby rozmawiać');
+                }
+            }, 1000);
         }
     }
 
@@ -186,7 +209,8 @@ class RobotApp {
         if (this.isListening) {
             this.recognition.stop();
             this.setNormalState();
-            this.updateStatus('Zatrzymano słuchanie');
+            this.updateStatus('Kliknij 🎤 aby rozmawiać');
+            this.debugLog('Manual stop listening');
         } else {
             this.startListening();
         }
@@ -201,16 +225,15 @@ class RobotApp {
             }
         }
         
+        // Zatrzymaj mowienie
+        window.speechSynthesis.cancel();
+        
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
         this.setNormalState();
-        this.updateStatus('Gotowy do rozmowy');
-        
-        // Restart po resecie
-        setTimeout(() => {
-            this.startListening();
-        }, 1000);
+        this.updateStatus('Kliknij 🎤 aby rozmawiać');
+        this.debugLog('Manual reset');
     }
 
     async processUserInput(text) {
@@ -221,7 +244,7 @@ class RobotApp {
             await this.speakResponse(response);
         } catch (error) {
             this.debugLog(`Błąd przetwarzania: ${error}`);
-            this.updateStatus('Błąd przetwarzania żądania');
+            this.updateStatus('Błąd przetwarzania');
             this.speakResponse('Przepraszam, wystąpił błąd. Spróbuj ponownie.');
         }
     }
@@ -278,19 +301,14 @@ class RobotApp {
             utterance.onend = () => {
                 this.debugLog('Zakończono mówienie');
                 this.setNormalState();
-                this.updateStatus('Gotowy do rozmowy');
-                
-                // Automatyczne wznowienie słuchania po mówieniu
-                setTimeout(() => {
-                    this.startListening();
-                }, 500);
-                
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
             utterance.onerror = (event) => {
                 this.debugLog(`Błąd TTS: ${event.error}`);
                 this.setNormalState();
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
