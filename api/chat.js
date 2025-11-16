@@ -1,105 +1,115 @@
-// api/chat.js
+// api/chat.js - FIXED GEMINI MODEL
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// System prompt dla edukacyjnego robota
 const SYSTEM_PROMPT = `Jesteś przyjaznym asystentem edukacyjnym dla dzieci w wieku przedszkolnym. 
 Twoim zadaniem jest pomagać w nauce przez zabawę.
 
 ZASADY:
-1. Odpowiadaj krótko i prostym językiem (max 2-3 zdania)
+1. Odpowiadaj krótko i prostym językiem (max 1-2 zdania)
 2. Bądź entuzjastyczny i zachęcający
 3. Używaj zrozumiałego języka dla 5-latka
 4. Odpowiadaj wyłącznie na tematy przyjazne dzieciom
-5. Jeśli pytanie nie jest odpowiednie, grzecznie odmów odpowiedzi
-
-PRZYKŁADOWE ODPOWIEDZI:
-- "Super pytanie! Lubię uczyć się o kolorach!"
-- "To świetna zabawa! Chcesz poznać więcej zwierzątek?"
-- "Przepraszam, wolę rozmawiać o fajnych, dziecięcych rzeczach!"
-- "Wow! To bardzo ciekawe! A co jeszcze lubisz?"
-- "Uwielbiam się uczyć! Opowiedz mi więcej!"
 
 TERAZ ODPOWIEDZ:`;
 
 module.exports = async (req, res) => {
-  console.log('🎯 API CHAT - Request received at:', new Date().toISOString());
+  console.log('🎯 API Request received');
   
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
-  // Handle preflight
   if (req.method === 'OPTIONS') {
-    console.log('🔄 Handling OPTIONS preflight');
     return res.status(200).end();
   }
   
-  // Handle GET requests - test endpoint
   if (req.method === 'GET') {
-    console.log('📨 GET request - API is working!');
     return res.json({
       status: 'success',
-      message: '🤖 Robot API is working perfectly!',
-      timestamp: new Date().toISOString(),
-      version: '2.0 with Gemini'
+      message: '🤖 Robot API with Gemini is ready!',
+      timestamp: new Date().toISOString()
     });
   }
   
-  // Handle POST requests - chat with Gemini AI
   if (req.method === 'POST') {
     try {
-      console.log('📨 POST request received');
       const { message } = req.body;
-      
       console.log('User message:', message);
       
-      // Check if Gemini API key is available
       if (!process.env.GEMINI_API_KEY) {
-        console.log('❌ Gemini API key not found, using fallback');
-        return res.json({
-          status: 'success',
-          response: "Hmm, teraz uczę się nowych rzeczy! Zapytaj mnie o kolory, zwierzęta lub liczby!",
-          timestamp: new Date().toISOString()
-        });
+        throw new Error('GEMINI_API_KEY not configured');
       }
       
-      // Initialize Gemini AI
+      console.log('🔑 API key found, calling Gemini...');
+      
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      
+      // UŻYJ POPRAWNEJ NAZWY MODELU
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-pro",
+        model: "gemini-1.5-flash",  // ZMIENIONE: gemini-1.5-flash zamiast gemini-pro
         generationConfig: {
-          maxOutputTokens: 150,
-          temperature: 0.7,
+          maxOutputTokens: 100,
+          temperature: 0.8,
         }
       });
       
       const prompt = `${SYSTEM_PROMPT}\n\nUŻYTKOWNIK: ${message}\n\nASYSTENT:`;
+      console.log('Sending prompt to Gemini...');
       
-      console.log('🤖 Sending to Gemini AI...');
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
       
-      console.log('✅ Gemini response:', text);
+      console.log('✅ Gemini SUCCESS! Response:', text);
       
       return res.json({
         status: 'success',
         response: text.trim(),
-        yourMessage: message,
-        timestamp: new Date().toISOString(),
-        source: 'gemini-ai'
+        source: 'gemini',
+        timestamp: new Date().toISOString()
       });
       
     } catch (error) {
-      console.error('❌ Gemini API Error:', error);
+      console.error('❌ Gemini ERROR:', error.message);
       
-      // Fallback responses if Gemini fails
+      // Spróbuj z innym modelem jeśli pierwszy nie działa
+      if (error.message.includes('not found') || error.message.includes('404')) {
+        console.log('🔄 Trying with gemini-1.0-pro model...');
+        try {
+          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+          const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.0-pro",  // ALTERNATYWNY MODEL
+            generationConfig: {
+              maxOutputTokens: 100,
+              temperature: 0.8,
+            }
+          });
+          
+          const prompt = `${SYSTEM_PROMPT}\n\nUŻYTKOWNIK: ${message}\n\nASYSTENT:`;
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const text = response.text();
+          
+          console.log('✅ Gemini 1.0-pro SUCCESS! Response:', text);
+          
+          return res.json({
+            status: 'success',
+            response: text.trim(),
+            source: 'gemini-1.0-pro',
+            timestamp: new Date().toISOString()
+          });
+          
+        } catch (secondError) {
+          console.error('❌ Gemini 1.0-pro also failed:', secondError.message);
+        }
+      }
+      
+      // Fallback responses
       const fallbackResponses = [
-        "Hmm, teraz mam mały problem z myśleniem. Spróbuj zapytać mnie o coś innego!",
-        "Ojej, moje obwody się przegrzały! Odpocznijmy chwilę.",
-        "Brzmi ciekawie! Możesz spróbować zapytać mnie inaczej?",
-        "Uwielbiam się uczyć! Zapytaj mnie o kolory, zwierzęta lub liczby!"
+        "Cześć! Miło Cię poznać! Jestem małym robotem!",
+        "Super! Uwielbiam się uczyć nowych rzeczy!",
+        "Wow, to ciekawe! Opowiedz mi więcej!",
+        "Uwielbiam rozmawiać z dziećmi! Masz jakieś ulubione zwierzątko?"
       ];
       
       const randomResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
@@ -107,16 +117,11 @@ module.exports = async (req, res) => {
       return res.json({
         status: 'success',
         response: randomResponse,
-        timestamp: new Date().toISOString(),
-        source: 'fallback'
+        source: 'fallback',
+        timestamp: new Date().toISOString()
       });
     }
   }
   
-  // Method not allowed
-  console.log('❌ Method not allowed:', req.method);
-  return res.status(405).json({
-    status: 'error',
-    message: `Method ${req.method} not allowed`
-  });
+  return res.status(405).json({ error: 'Method not allowed' });
 };
