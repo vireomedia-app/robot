@@ -5,6 +5,7 @@ class RobotApp {
         this.isTalking = false;
         this.continuousMode = false; // Track if continuous listening mode is active
         this.recognition = null;
+        this.conversationHistory = []; // Store conversation history for context
         
         this.robotFace = document.getElementById('robotFace');
         this.mouth = document.getElementById('mouth');
@@ -217,23 +218,48 @@ class RobotApp {
         this.isThinking = false;
         this.isTalking = false;
         this.continuousMode = false; // Turn off continuous mode on reset
+        this.conversationHistory = []; // Clear conversation history on reset
         
         this.setNormalState();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
+        
+        console.log('🔄 Conversation history cleared');
     }
 
     async processUserInput(text) {
         console.log('🧠 Processing:', text);
         this.setThinkingState();
         
+        // Add user message to conversation history
+        this.conversationHistory.push({
+            role: 'user',
+            content: text
+        });
+        console.log(`📝 History length: ${this.conversationHistory.length} messages`);
+        
         try {
             const response = await this.sendToAI(text);
             console.log('🤖 Response:', response);
+            
+            // Add assistant response to conversation history
+            this.conversationHistory.push({
+                role: 'assistant',
+                content: response
+            });
+            
             await this.speakResponse(response);
         } catch (error) {
             console.log('❌ Process error:', error);
             this.updateStatus('Błąd przetwarzania');
-            this.speakResponse('Przepraszam, spróbuj ponownie.');
+            const errorResponse = 'Przepraszam, spróbuj ponownie.';
+            
+            // Add error response to history
+            this.conversationHistory.push({
+                role: 'assistant',
+                content: errorResponse
+            });
+            
+            await this.speakResponse(errorResponse);
         }
     }
 
@@ -244,7 +270,10 @@ class RobotApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ message: userText })
+                body: JSON.stringify({ 
+                    message: userText,
+                    history: this.conversationHistory // Send full conversation history
+                })
             });
 
             if (!response.ok) {
