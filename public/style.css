@@ -77,32 +77,32 @@ body {
 }
 
 /* Stany animacji */
-.listening .eye {
+.robot-face.listening .eye {
     background: #ffeb3b;
     border-color: #ff9800;
     animation: glow 1.5s infinite alternate;
 }
 
-.listening .pupil {
+.robot-face.listening .pupil {
     background: #ff9800;
     animation: listening-pupil 2s infinite;
 }
 
-.thinking .mouth {
+.robot-face.thinking .mouth {
     animation: think 1s infinite alternate;
     background: #4CAF50;
 }
 
-.talking .mouth {
+.robot-face.talking .mouth {
     animation: talk 0.3s infinite alternate;
     background: #f44336;
 }
 
-.thinking .eye {
+.robot-face.thinking .eye {
     animation: think-eye 1.5s infinite alternate;
 }
 
-.talking .eye {
+.robot-face.talking .eye {
     animation: talk-eye 0.5s infinite alternate;
 }
 
@@ -145,7 +145,7 @@ body {
     }
     50% { 
         transform: scale(1.05);
-        box-shadow: 0 0 0 10px rgba(255, 100, 100, 0);
+        box-shadow: 0 0 0 15px rgba(255, 100, 100, 0);
     }
     100% { 
         transform: scale(1); 
@@ -211,13 +211,13 @@ body {
     text-align: center;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     min-height: 24px;
-    padding: 0 10px;
+    padding: 8px 16px;
     font-weight: 500;
     background: rgba(0, 0, 0, 0.3);
-    padding: 8px 16px;
     border-radius: 20px;
     backdrop-filter: blur(10px);
     max-width: 90%;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Kontrolki - POPRAWIONE DLA TELEFONU */
@@ -248,6 +248,8 @@ body {
     -webkit-tap-highlight-color: transparent;
     border: 2px solid rgba(255,255,255,0.2);
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    color: #333;
+    font-weight: bold;
 }
 
 .control-btn:hover {
@@ -584,12 +586,6 @@ body {
     }
 }
 
-/* Zwiększenie czytelności na jasnym tło (dla niektórych przeglądarek) */
-.control-btn {
-    color: #333;
-    font-weight: bold;
-}
-
 /* Zapobieganie flashowi białego ekranu podczas ładowania */
 body:not(.loaded) {
     background: #667eea;
@@ -612,4 +608,22 @@ body:not(.loaded) {
         height: 100vh;
         height: -webkit-fill-available;
     }
+}
+
+/* Lepsze feedback dla dotyku */
+.control-btn {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Poprawki dla stanów błędów */
+.error .robot-face {
+    filter: grayscale(0.5);
+}
+
+.error .status {
+    background: rgba(255, 0, 0, 0.3);
+    color: #ffcccc;
 }
