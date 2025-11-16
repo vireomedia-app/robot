@@ -1,4 +1,4 @@
-// api/chat.js - PROSTE I DZIAŁAJĄCE ROZWIĄZANIE
+// api/chat.js - NAPRAWIONA WERSJA Z GEMINI API
 const https = require('https');
 
 function getSmartResponse(userMessage) {
@@ -6,7 +6,7 @@ function getSmartResponse(userMessage) {
     
     console.log('🔄 Processing message:', message);
     
-    // Proste, bezpośrednie odpowiedzi
+    // Proste, bezpośrednie odpowiedzi (fallback)
     if (/(cześć|hej|witaj|siema|hello|hi|dzień dobry)/i.test(message)) {
         const greetings = [
             "Cześć! Jestem Robo, twój wesoły robot! Jak się masz?",
@@ -65,18 +65,18 @@ function getSmartResponse(userMessage) {
     }
 }
 
-// PROSTE wywołanie Gemini API - tylko jeśli klucz jest dostępny
+// NAPRAWIONE wywołanie Gemini API
 function callGeminiAPI(apiKey, message) {
     return new Promise((resolve, reject) => {
         const postData = JSON.stringify({
             contents: [{
                 parts: [{
-                    text: `Jesteś przyjaznym robotem dla dzieci. Odpowiedz krótko i wesoło po polsku: ${message}`
+                    text: `Jesteś przyjaznym robotem dla dzieci o imieniu Robo. Odpowiedz krótko i wesoło po polsku (maksymalnie 2-3 zdania): ${message}`
                 }]
             }],
             generationConfig: {
-                maxOutputTokens: 100,
-                temperature: 0.7
+                maxOutputTokens: 150,
+                temperature: 0.8
             }
         });
 
@@ -89,10 +89,10 @@ function callGeminiAPI(apiKey, message) {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(postData)
             },
-            timeout: 10000
+            timeout: 15000
         };
 
-        console.log('🔄 Attempting Gemini API call...');
+        console.log('🔄 Calling Gemini API...');
         
         const req = https.request(options, (res) => {
             let data = '';
@@ -114,16 +114,23 @@ function callGeminiAPI(apiKey, message) {
                             reject(new Error('Empty response'));
                         }
                     } else {
+                        console.log('❌ Gemini API error:', parsed.error?.message || 'Unknown error');
                         reject(new Error(parsed.error?.message || 'API error'));
                     }
                 } catch (e) {
+                    console.log('❌ Parse error:', e.message);
                     reject(new Error('Parse error'));
                 }
             });
         });
 
-        req.on('error', reject);
+        req.on('error', (error) => {
+            console.log('❌ Request error:', error.message);
+            reject(error);
+        });
+        
         req.on('timeout', () => {
+            console.log('❌ Request timeout');
             req.destroy();
             reject(new Error('Timeout'));
         });
@@ -134,10 +141,11 @@ function callGeminiAPI(apiKey, message) {
 }
 
 module.exports = async (req, res) => {
-    // CORS headers
+    // CORS headers - rozszerzone dla iOS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
     
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -155,9 +163,41 @@ module.exports = async (req, res) => {
         try {
             const { message } = req.body;
             
+            if (!message || typeof message !== 'string') {
+                return res.json({
+                    status: 'success',
+                    response: 'Nie zrozumiałem. Spróbuj ponownie!',
+                    source: 'validation-fallback',
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
             console.log('💬 Received:', message);
             
-            // ZAWSZE używaj smart response - proste i działające
+            // NAPRAWIONE: Pobierz klucz API z environment variables
+            const apiKey = process.env.GEMINI_API_KEY;
+            
+            // Próbuj najpierw Gemini API jeśli klucz jest dostępny
+            if (apiKey && apiKey.length > 20) {
+                try {
+                    console.log('🔑 API Key found, attempting Gemini API call...');
+                    const geminiResponse = await callGeminiAPI(apiKey, message);
+                    
+                    return res.json({
+                        status: 'success',
+                        response: geminiResponse,
+                        source: 'gemini-api',
+                        timestamp: new Date().toISOString()
+                    });
+                } catch (apiError) {
+                    console.log('⚠️ Gemini API failed, using smart fallback:', apiError.message);
+                    // Fallback do smart response
+                }
+            } else {
+                console.log('⚠️ No valid API key found, using smart responses');
+            }
+            
+            // Fallback: użyj smart response
             const response = getSmartResponse(message);
             
             return res.json({
@@ -168,7 +208,7 @@ module.exports = async (req, res) => {
             });
             
         } catch (error) {
-            console.log('❌ Error:', error);
+            console.log('❌ Error:', error.message);
             const response = getSmartResponse('hello');
             return res.json({
                 status: 'success',

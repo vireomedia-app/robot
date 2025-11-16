@@ -4,6 +4,8 @@ class RobotApp {
         this.isThinking = false;
         this.isTalking = false;
         this.recognition = null;
+        this.retryCount = 0;
+        this.maxRetries = 2;
         
         this.robotFace = document.getElementById('robotFace');
         this.mouth = document.getElementById('mouth');
@@ -21,11 +23,19 @@ class RobotApp {
         this.setupSpeechRecognition();
         
         console.log('🤖 Robot initialized');
+        console.log('📱 Platform:', this.detectPlatform());
         
         // Debug tylko na localhost
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             this.debugPanel.style.display = 'block';
         }
+    }
+
+    detectPlatform() {
+        const ua = navigator.userAgent;
+        if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
+        if (/Android/i.test(ua)) return 'Android';
+        return 'Desktop';
     }
 
     setupSpeechRecognition() {
@@ -66,8 +76,12 @@ class RobotApp {
             this.isListening = false;
             this.setNormalState();
             
-            if (event.error === 'not-allowed') {
-                this.updateStatus('Brak uprawnień do mikrofonu');
+            if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                this.updateStatus('Brak uprawnień do mikrofonu. Włącz mikrofon w ustawieniach.');
+            } else if (event.error === 'no-speech') {
+                this.updateStatus('Nie usłyszałem nic. Spróbuj ponownie.');
+            } else if (event.error === 'network') {
+                this.updateStatus('Błąd połączenia. Sprawdź internet.');
             } else {
                 this.updateStatus('Błąd rozpoznawania mowy');
             }
@@ -160,11 +174,17 @@ class RobotApp {
         }
         
         try {
-            window.speechSynthesis.cancel();
+            // Wyczyść kolejkę syntezy mowy przed rozpoczęciem słuchania
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
             this.recognition.start();
         } catch (error) {
             console.log('❌ Start error:', error);
-            this.updateStatus('Błąd mikrofonu');
+            this.updateStatus('Błąd mikrofonu. Spróbuj ponownie.');
+            setTimeout(() => {
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+            }, 2000);
         }
     }
 
@@ -173,6 +193,9 @@ class RobotApp {
             this.recognition.stop();
             this.setNormalState();
             this.updateStatus('Anulowano');
+            setTimeout(() => {
+                this.updateStatus('Kliknij 🎤 aby rozmawiać');
+            }, 1000);
         } else {
             this.startListening();
         }
@@ -180,13 +203,21 @@ class RobotApp {
 
     resetApp() {
         if (this.recognition) {
-            this.recognition.stop();
+            try {
+                this.recognition.stop();
+            } catch (e) {
+                console.log('Stop recognition error:', e);
+            }
         }
-        window.speechSynthesis.cancel();
+        
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
         
         this.isListening = false;
         this.isThinking = false;
         this.isTalking = false;
+        this.retryCount = 0;
         
         this.setNormalState();
         this.updateStatus('Kliknij 🎤 aby rozmawiać');
@@ -195,6 +226,7 @@ class RobotApp {
     async processUserInput(text) {
         console.log('🧠 Processing:', text);
         this.setThinkingState();
+        this.retryCount = 0;
         
         try {
             const response = await this.sendToAI(text);
@@ -203,63 +235,125 @@ class RobotApp {
         } catch (error) {
             console.log('❌ Process error:', error);
             this.updateStatus('Błąd przetwarzania');
-            this.speakResponse('Przepraszam, spróbuj ponownie.');
+            await this.speakResponse('Przepraszam, spróbuj ponownie.');
         }
     }
 
     async sendToAI(userText) {
-        try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ message: userText })
-            });
+        const maxRetries = this.maxRetries;
+        let lastError = null;
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`🔄 API call attempt ${attempt + 1}/${maxRetries + 1}`);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+                
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: userText }),
+                    signal: controller.signal
+                });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error: ${response.status}`);
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.response) {
+                    console.log('✅ API success, source:', data.source);
+                    return data.response;
+                } else {
+                    throw new Error('Empty response from API');
+                }
+                
+            } catch (error) {
+                lastError = error;
+                console.log(`❌ API attempt ${attempt + 1} failed:`, error.message);
+                
+                if (attempt < maxRetries) {
+                    // Poczekaj przed kolejną próbą (exponential backoff)
+                    const delay = Math.min(1000 * Math.pow(2, attempt), 3000);
+                    console.log(`⏳ Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                    console.log('❌ All API attempts failed');
+                }
             }
-
-            const data = await response.json();
-            return data.response;
-            
-        } catch (error) {
-            console.log('❌ API error:', error);
-            return 'Przepraszam, problem z połączeniem. Spróbuj ponownie.';
         }
+        
+        // Jeśli wszystkie próby zawiodły, zwróć fallback response
+        console.log('⚠️ Using fallback response');
+        return this.getFallbackResponse(userText);
+    }
+
+    getFallbackResponse(text) {
+        const message = (text || '').toLowerCase().trim();
+        
+        if (/(cześć|hej|witaj|siema|hello|hi|dzień dobry)/i.test(message)) {
+            return "Cześć! Jestem Robo! Mam problem z połączeniem, ale i tak możemy pogadać!";
+        }
+        
+        return "Mam problem z połączeniem, ale jestem tu dla Ciebie! Spróbuj ponownie za chwilę.";
     }
 
     async speakResponse(text) {
         this.setTalkingState();
         
         return new Promise((resolve) => {
-            const cleanText = text.replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ.,!?;:()\-+=\/]/g, ' ').replace(/\s+/g, ' ').trim();
+            const cleanText = text
+                .replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ.,!?;:()\-+=\/]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
             
             if (!window.speechSynthesis) {
+                console.log('❌ Speech synthesis not available');
                 this.setNormalState();
                 resolve();
                 return;
             }
 
+            // Wyczyść kolejkę przed mówieniem
+            window.speechSynthesis.cancel();
+
             const utterance = new SpeechSynthesisUtterance(cleanText);
             utterance.lang = 'pl-PL';
             utterance.rate = 0.9;
             utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            // iOS fix: wybierz konkretny głos jeśli dostępny
+            const voices = window.speechSynthesis.getVoices();
+            const polishVoice = voices.find(voice => voice.lang.startsWith('pl'));
+            if (polishVoice) {
+                utterance.voice = polishVoice;
+            }
             
             utterance.onend = () => {
+                console.log('✅ Speech finished');
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
-            utterance.onerror = () => {
+            utterance.onerror = (error) => {
+                console.log('❌ Speech error:', error);
                 this.setNormalState();
                 this.updateStatus('Kliknij 🎤 aby rozmawiać');
                 resolve();
             };
             
-            window.speechSynthesis.speak(utterance);
+            // iOS fix: opóźnienie przed mówieniem
+            setTimeout(() => {
+                window.speechSynthesis.speak(utterance);
+            }, 100);
         });
     }
 
@@ -303,13 +397,24 @@ class RobotApp {
 
     toggleFullscreen() {
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
+            document.documentElement.requestFullscreen().catch(err => {
+                console.log('Fullscreen error:', err);
+            });
         } else {
             document.exitFullscreen();
         }
     }
 }
 
+// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     new RobotApp();
 });
+
+// iOS fix: load voices
+if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = () => {
+        const voices = window.speechSynthesis.getVoices();
+        console.log('📢 Available voices:', voices.length);
+    };
+}
