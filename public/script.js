@@ -17,7 +17,13 @@ class RobotApp {
         this.setupSpeechRecognition();
         this.setupEventListeners();
         this.setupAnimations();
+        this.setupAutoRestart();
         this.updateStatus('Gotowy do rozmowy');
+        
+        // Automatyczne rozpoczęcie słuchania po załadowaniu
+        setTimeout(() => {
+            this.startListening();
+        }, 2000);
         
         // Pokaz debug panel w development
         if (window.location.hostname === 'localhost') {
@@ -30,6 +36,7 @@ class RobotApp {
         
         if (!SpeechRecognition) {
             this.updateStatus('Przeglądarka nie obsługuje rozpoznawania mowy');
+            this.debugLog('SpeechRecognition not supported');
             return;
         }
 
@@ -43,6 +50,7 @@ class RobotApp {
             this.isListening = true;
             this.setListeningState();
             this.updateStatus('Słucham...');
+            this.debugLog('Speech recognition started');
         };
 
         this.recognition.onresult = async (event) => {
@@ -55,14 +63,31 @@ class RobotApp {
 
         this.recognition.onerror = (event) => {
             this.debugLog(`Błąd rozpoznawania: ${event.error}`);
+            
+            // Automatyczne restartowanie przy niektórych błędach
+            if (event.error === 'no-speech' || event.error === 'audio-capture') {
+                this.debugLog('Automatyczne restartowanie rozpoznawania...');
+                setTimeout(() => {
+                    if (!this.isThinking && !this.isTalking) {
+                        this.startListening();
+                    }
+                }, 1000);
+            }
+            
             this.setNormalState();
             this.updateStatus('Błąd rozpoznawania mowy');
         };
 
         this.recognition.onend = () => {
             this.isListening = false;
+            this.debugLog('Speech recognition ended');
+            
+            // Automatyczne restartowanie jeśli nie jesteśmy w trakcie procesowania
             if (!this.isThinking && !this.isTalking) {
-                this.setNormalState();
+                setTimeout(() => {
+                    this.setNormalState();
+                    this.updateStatus('Gotowy do rozmowy');
+                }, 500);
             }
         };
     }
@@ -70,6 +95,10 @@ class RobotApp {
     setupEventListeners() {
         document.getElementById('listenBtn').addEventListener('click', () => {
             this.toggleListening();
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            this.resetListening();
         });
 
         document.getElementById('fullscreenBtn').addEventListener('click', () => {
@@ -95,6 +124,16 @@ class RobotApp {
                 this.blink();
             }
         }, 3000);
+    }
+
+    setupAutoRestart() {
+        // Automatyczne restartowanie co 30 sekund jeśli nieaktywne
+        setInterval(() => {
+            if (!this.isListening && !this.isThinking && !this.isTalking) {
+                this.debugLog('Auto-restarting speech recognition');
+                this.startListening();
+            }
+        }, 30000);
     }
 
     moveEyes(x, y) {
@@ -128,17 +167,50 @@ class RobotApp {
         });
     }
 
+    startListening() {
+        if (this.isListening || this.isThinking || this.isTalking) {
+            return;
+        }
+        
+        try {
+            this.recognition.start();
+            this.debugLog('Manual start listening');
+        } catch (error) {
+            this.debugLog(`Błąd startu rozpoznawania: ${error}`);
+            // Spróbuj ponownie po chwili
+            setTimeout(() => this.startListening(), 1000);
+        }
+    }
+
     toggleListening() {
         if (this.isListening) {
             this.recognition.stop();
             this.setNormalState();
+            this.updateStatus('Zatrzymano słuchanie');
         } else {
+            this.startListening();
+        }
+    }
+
+    resetListening() {
+        if (this.recognition) {
             try {
-                this.recognition.start();
+                this.recognition.stop();
             } catch (error) {
-                this.debugLog(`Błąd startu rozpoznawania: ${error}`);
+                // Ignoruj błędy przy zatrzymywaniu
             }
         }
+        
+        this.isListening = false;
+        this.isThinking = false;
+        this.isTalking = false;
+        this.setNormalState();
+        this.updateStatus('Gotowy do rozmowy');
+        
+        // Restart po resecie
+        setTimeout(() => {
+            this.startListening();
+        }, 1000);
     }
 
     async processUserInput(text) {
@@ -155,7 +227,7 @@ class RobotApp {
     }
 
     async sendToAI(userText) {
-        this.debugLog(`Wysyłanie do AI: ${userText}`);
+        this.debugLog(`📤 Wysyłanie: "${userText}"`);
         
         try {
             const response = await fetch('/api/chat', {
@@ -166,17 +238,24 @@ class RobotApp {
                 body: JSON.stringify({ message: userText })
             });
 
+            this.debugLog(`📥 Status odpowiedzi: ${response.status}`);
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
-            this.debugLog(`Otrzymano odpowiedź: ${data.response}`);
+            this.debugLog(`✅ Otrzymano: ${data.response}`);
+            
+            if (data.error) {
+                this.debugLog(`❌ Błąd API: ${data.error}`);
+            }
+            
             return data.response;
             
         } catch (error) {
-            this.debugLog(`Błąd API: ${error}`);
-            return 'Przepraszam, nie mogę się teraz połączyć z systemem. Spróbuj ponownie za chwilę.';
+            this.debugLog(`💥 Błąd fetch: ${error.message}`);
+            return 'Przepraszam, nie mogę się teraz połączyć z systemem. Spróbuj ponownie.';
         }
     }
 
@@ -184,6 +263,9 @@ class RobotApp {
         this.setTalkingState();
         
         return new Promise((resolve) => {
+            // Zatrzymaj poprzednie mowienie
+            window.speechSynthesis.cancel();
+            
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'pl-PL';
             utterance.rate = 0.9;
@@ -197,6 +279,12 @@ class RobotApp {
                 this.debugLog('Zakończono mówienie');
                 this.setNormalState();
                 this.updateStatus('Gotowy do rozmowy');
+                
+                // Automatyczne wznowienie słuchania po mówieniu
+                setTimeout(() => {
+                    this.startListening();
+                }, 500);
+                
                 resolve();
             };
             

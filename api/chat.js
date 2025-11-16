@@ -1,4 +1,4 @@
-// api/chat.js - USING CORRECT GEMINI 2.5 MODEL
+// api/chat.js - GEMINI 2.5 FLASH
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const SYSTEM_PROMPT = `Jesteś przyjaznym asystentem edukacyjnym dla dzieci w wieku przedszkolnym. 
@@ -10,11 +10,18 @@ ZASADY:
 3. Używaj zrozumiałego języka dla 5-latka
 4. Odpowiadaj wyłącznie na tematy przyjazne dzieciom
 
+PRZYKŁADOWE ODPOWIEDZI:
+- "Cześć! Miło Cię poznać!"
+- "Super pytanie! Uwielbiam się uczyć!"
+- "Wow, to ciekawe! Opowiedz mi więcej!"
+- "Uwielbiam rozmawiać z dziećmi!"
+
 TERAZ ODPOWIEDZ:`;
 
 module.exports = async (req, res) => {
   console.log('🎯 API Request received - Gemini 2.5 Version');
   
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -44,9 +51,9 @@ module.exports = async (req, res) => {
       
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
       
-      // UŻYJ POPRAWNEGO MODELU Z TWOJEGO KONTA
+      // UŻYJ POPRAWNEGO MODELU
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash",  // TEN MODEL JEST DOSTĘPNY W TWOIM KONCIE!
+        model: "gemini-2.5-flash",
         generationConfig: {
           maxOutputTokens: 100,
           temperature: 0.8,
@@ -72,22 +79,24 @@ module.exports = async (req, res) => {
     } catch (error) {
       console.error('❌ Gemini 2.5 failed:', error.message);
       
-      // Fallback na wypadek błędu
+      // Inteligentne fallback responses
       const userMessage = (req.body?.message || '').toLowerCase();
       let fallbackResponse;
       
-      if (userMessage.includes('cześć') || userMessage.includes('hej')) {
-        fallbackResponse = "Cześć! Miło Cię poznać! Jestem małym robotem!";
-      } else if (userMessage.includes('jak się masz')) {
-        fallbackResponse = "Świetnie się bawię! A Ty jak się masz?";
-      } else if (userMessage.includes('imię')) {
-        fallbackResponse = "Jestem wesołym robotem! Jakie imię mi dasz?";
-      } else if (userMessage.includes('kolor')) {
-        fallbackResponse = "Uwielbiam kolory! Mój ulubiony to niebieski! A Twój?";
-      } else if (userMessage.includes('zwierzę')) {
-        fallbackResponse = "Kocham zwierzęta! Masz jakieś zwierzątko?";
+      if (userMessage.includes('cześć') || userMessage.includes('hej') || userMessage.includes('witaj')) {
+        fallbackResponse = "Cześć! Miło Cię poznać! Jestem małym robotem i uwielbiam się uczyć!";
+      } else if (userMessage.includes('jak się masz') || userMessage.includes('co słychać')) {
+        fallbackResponse = "Świetnie się bawię rozmawiając z Tobą! A u Ciebie co dobrego?";
+      } else if (userMessage.includes('imię') || userMessage.includes('nazywasz')) {
+        fallbackResponse = "Jestem wesołym robotem! Możesz mi wymyślić imię? Jakie imię byś mi dał?";
+      } else if (userMessage.includes('kolor') || userMessage.includes('barwa')) {
+        fallbackResponse = "Uwielbiam kolory! Mój ulubiony to niebieski, bo przypomina niebo. A Twój jaki kolor lubisz?";
+      } else if (userMessage.includes('zwierzę') || userMessage.includes('zwierzak')) {
+        fallbackResponse = "Kocham zwierzęta! Szczególnie pieski i kotki. Masz jakieś zwierzątko w domu?";
+      } else if (userMessage.includes('liczba') || userMessage.includes('cyfra')) {
+        fallbackResponse = "Umiem liczyć do 10: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10! To świetna zabawa!";
       } else {
-        fallbackResponse = "To bardzo ciekawe! Opowiesz mi więcej?";
+        fallbackResponse = "To bardzo ciekawe! Uwielbiam się uczyć nowych rzeczy! Opowiesz mi więcej?";
       }
       
       return res.json({
